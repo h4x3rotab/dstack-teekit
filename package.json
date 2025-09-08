@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "server": "tsx server/server.ts",
     "typecheck": "tsc --noEmit --watch",
-    "start": "concurrently \"npm run server\" \"npm run dev\""
+    "start": "concurrently \"npm run server\" \"npm run dev\"",
+    "test": "ava"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -24,10 +25,12 @@
     "@eslint/js": "^9.33.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/node": "^24.3.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
+    "ava": "^6.4.1",
     "concurrently": "^9.2.1",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -36,5 +39,17 @@
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vite": "^7.1.2"
+  }
+  ,
+  "ava": {
+    "extensions": [
+      "ts"
+    ],
+    "nodeArguments": [
+      "--import=tsx"
+    ],
+    "files": [
+      "test/**/*.test.ts"
+    ]
   }
 }
