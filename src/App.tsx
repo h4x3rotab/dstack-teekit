@@ -42,6 +42,7 @@ function App() {
   const [connected, setConnected] = useState<boolean>(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,11 +57,14 @@ function App() {
     ws.onopen = () => {
       setConnected(true);
       console.log('Connected to chat server');
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 1)
     };
 
     ws.onmessage = (event: MessageEvent) => {
       const data: WebSocketMessage = JSON.parse(event.data);
-      
+
       if (data.type === 'backlog') {
         setMessages(data.messages || []);
       } else if (data.type === 'message' && data.message) {
@@ -85,7 +89,7 @@ function App() {
 
   const sendMessage = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     if (newMessage.trim() && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const message: ChatMessage = {
         type: 'chat',
@@ -120,7 +124,7 @@ function App() {
           </span>
         </div>
       </div>
-      
+
       <div className="messages-container">
         {messages.map((message) => (
           <div
@@ -136,9 +140,10 @@ function App() {
         ))}
         <div ref={messagesEndRef} />
       </div>
-      
+
       <form onSubmit={sendMessage} className="message-form">
         <input
+          ref={inputRef}
           type="text"
           value={newMessage}
           onChange={handleInputChange}
@@ -147,8 +152,8 @@ function App() {
           className="message-input"
           autoFocus
         />
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={!connected || !newMessage.trim()}
           className="send-button"
         >
