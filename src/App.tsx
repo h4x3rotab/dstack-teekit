@@ -12,12 +12,23 @@ interface WebSocketMessage {
   type: "backlog" | "message"
   messages?: Message[]
   message?: Message
+  hiddenCount?: number
 }
 
 interface ChatMessage {
   type: "chat"
   username: string
   text: string
+}
+
+interface UptimeData {
+  uptime: {
+    milliseconds: number
+    seconds: number
+    minutes: number
+    hours: number
+    formatted: string
+  }
 }
 
 function generateUsername(): string {
@@ -40,6 +51,8 @@ function App() {
   const [newMessage, setNewMessage] = useState<string>("")
   const [username] = useState<string>(getStoredUsername)
   const [connected, setConnected] = useState<boolean>(false)
+  const [uptime, setUptime] = useState<string>("")
+  const [hiddenMessagesCount, setHiddenMessagesCount] = useState<number>(0)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -49,6 +62,23 @@ function App() {
   }
 
   useEffect(scrollToBottom, [messages])
+
+  useEffect(() => {
+    const fetchUptime = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/uptime')
+        const data: UptimeData = await response.json()
+        setUptime(data.uptime.formatted)
+      } catch (error) {
+        console.error('Failed to fetch uptime:', error)
+      }
+    }
+
+    fetchUptime()
+    const interval = setInterval(fetchUptime, 10000) // Update every 10 seconds
+
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:3001")
@@ -67,6 +97,7 @@ function App() {
 
       if (data.type === "backlog") {
         setMessages(data.messages || [])
+        setHiddenMessagesCount(data.hiddenCount || 0)
       } else if (data.type === "message" && data.message) {
         setMessages((prev) => [...prev, data.message!])
       }
@@ -132,6 +163,16 @@ function App() {
       </div>
 
       <div className="messages-container">
+        {uptime && (
+          <div className="uptime-display">
+            Server uptime: {uptime}
+          </div>
+        )}
+        {hiddenMessagesCount > 0 && (
+          <div className="hidden-messages-display">
+            {hiddenMessagesCount} earlier message{hiddenMessagesCount !== 1 ? 's' : ''}
+          </div>
+        )}
         {messages.map((message) => (
           <div
             key={message.id}

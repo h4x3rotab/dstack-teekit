@@ -19,6 +19,7 @@ interface IncomingChatMessage {
 interface BacklogMessage {
   type: "backlog"
   messages: Message[]
+  hiddenCount: number
 }
 
 interface BroadcastMessage {
@@ -34,15 +35,37 @@ app.use(cors())
 app.use(express.json())
 
 let messages: Message[] = []
+let totalMessageCount = 0
 const MAX_MESSAGES = 30
+const startTime = Date.now()
+
+// API Routes
+app.get('/uptime', (req, res) => {
+  const uptimeMs = Date.now() - startTime
+  const uptimeSeconds = Math.floor(uptimeMs / 1000)
+  const uptimeMinutes = Math.floor(uptimeSeconds / 60)
+  const uptimeHours = Math.floor(uptimeMinutes / 60)
+  
+  res.json({
+    uptime: {
+      milliseconds: uptimeMs,
+      seconds: uptimeSeconds,
+      minutes: uptimeMinutes,
+      hours: uptimeHours,
+      formatted: `${uptimeHours}h ${uptimeMinutes % 60}m ${uptimeSeconds % 60}s`
+    }
+  })
+})
 
 wss.on("connection", (ws: WebSocket) => {
   console.log("Client connected")
 
   // Send message backlog to new client
+  const hiddenCount = Math.max(0, totalMessageCount - messages.length)
   const backlogMessage: BacklogMessage = {
     type: "backlog",
     messages: messages,
+    hiddenCount: hiddenCount
   }
   ws.send(JSON.stringify(backlogMessage))
 
@@ -60,6 +83,7 @@ wss.on("connection", (ws: WebSocket) => {
 
         // Add to message history
         messages.push(chatMessage)
+        totalMessageCount++
 
         // Keep only last 30 messages
         if (messages.length > MAX_MESSAGES) {
