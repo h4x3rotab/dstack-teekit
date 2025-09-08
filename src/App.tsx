@@ -1,117 +1,121 @@
-import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react'
-import './App.css'
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react"
+import "./App.css"
 
 interface Message {
-  id: string;
-  username: string;
-  text: string;
-  timestamp: string;
+  id: string
+  username: string
+  text: string
+  timestamp: string
 }
 
 interface WebSocketMessage {
-  type: 'backlog' | 'message';
-  messages?: Message[];
-  message?: Message;
+  type: "backlog" | "message"
+  messages?: Message[]
+  message?: Message
 }
 
 interface ChatMessage {
-  type: 'chat';
-  username: string;
-  text: string;
+  type: "chat"
+  username: string
+  text: string
 }
 
 function generateUsername(): string {
-  const randomNum = Math.floor(Math.random() * 1000000);
-  return `user${randomNum.toString().padStart(6, '0')}`;
+  const randomNum = Math.floor(Math.random() * 1000000)
+  return `user${randomNum.toString().padStart(6, "0")}`
 }
 
 function getStoredUsername(): string {
-  const stored = localStorage.getItem('chat-username');
+  const stored = localStorage.getItem("chat-username")
   if (stored) {
-    return stored;
+    return stored
   }
-  const newUsername = generateUsername();
-  localStorage.setItem('chat-username', newUsername);
-  return newUsername;
+  const newUsername = generateUsername()
+  localStorage.setItem("chat-username", newUsername)
+  return newUsername
 }
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState<string>('');
-  const [username] = useState<string>(getStoredUsername);
-  const [connected, setConnected] = useState<boolean>(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [messages, setMessages] = useState<Message[]>([])
+  const [newMessage, setNewMessage] = useState<string>("")
+  const [username] = useState<string>(getStoredUsername)
+  const [connected, setConnected] = useState<boolean>(false)
+  const wsRef = useRef<WebSocket | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
-  useEffect(scrollToBottom, [messages]);
+  useEffect(scrollToBottom, [messages])
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:3001');
-    wsRef.current = ws;
+    const ws = new WebSocket("ws://localhost:3001")
+    wsRef.current = ws
 
     ws.onopen = () => {
-      setConnected(true);
-      console.log('Connected to chat server');
+      setConnected(true)
+      console.log("Connected to chat server")
       setTimeout(() => {
-        inputRef.current?.focus();
+        inputRef.current?.focus()
       }, 1)
-    };
+    }
 
     ws.onmessage = (event: MessageEvent) => {
-      const data: WebSocketMessage = JSON.parse(event.data);
+      const data: WebSocketMessage = JSON.parse(event.data)
 
-      if (data.type === 'backlog') {
-        setMessages(data.messages || []);
-      } else if (data.type === 'message' && data.message) {
-        setMessages(prev => [...prev, data.message!]);
+      if (data.type === "backlog") {
+        setMessages(data.messages || [])
+      } else if (data.type === "message" && data.message) {
+        setMessages((prev) => [...prev, data.message!])
       }
-    };
+    }
 
     ws.onclose = () => {
-      setConnected(false);
-      console.log('Disconnected from chat server');
-    };
+      setConnected(false)
+      console.log("Disconnected from chat server")
+    }
 
     ws.onerror = (error: Event) => {
-      console.error('WebSocket error:', error);
-      setConnected(false);
-    };
+      console.error("WebSocket error:", error)
+      setConnected(false)
+    }
 
     return () => {
-      ws.close();
-    };
-  }, []);
+      ws.close()
+    }
+  }, [])
 
   const sendMessage = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+    e.preventDefault()
 
-    if (newMessage.trim() && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (
+      newMessage.trim() &&
+      wsRef.current &&
+      wsRef.current.readyState === WebSocket.OPEN
+    ) {
       const message: ChatMessage = {
-        type: 'chat',
+        type: "chat",
         username: username,
-        text: newMessage.trim()
-      };
-      wsRef.current.send(JSON.stringify(message));
-      setNewMessage('');
+        text: newMessage.trim(),
+      }
+      wsRef.current.send(JSON.stringify(message))
+      setNewMessage("")
     }
-  };
+  }
 
   const formatTime = (timestamp: string): string => {
-    return new Date(timestamp).toLocaleTimeString('en-US', {
+    return new Date(timestamp).toLocaleTimeString("en-US", {
       hour12: false,
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setNewMessage(e.target.value);
-  };
+    setNewMessage(e.target.value)
+  }
 
   return (
     <div className="chat-container">
@@ -119,8 +123,10 @@ function App() {
         <h1>Chat Room</h1>
         <div className="user-info">
           <span className="username">You are: {username}</span>
-          <span className={`status ${connected ? 'connected' : 'disconnected'}`}>
-            {connected ? '🟢 Connected' : '🔴 Disconnected'}
+          <span
+            className={`status ${connected ? "connected" : "disconnected"}`}
+          >
+            {connected ? "🟢 Connected" : "🔴 Disconnected"}
           </span>
         </div>
       </div>
@@ -129,11 +135,13 @@ function App() {
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`message ${message.username === username ? 'own-message' : 'other-message'}`}
+            className={`message ${message.username === username ? "own-message" : "other-message"}`}
           >
             <div className="message-header">
               <span className="message-username">{message.username}</span>
-              <span className="message-time">{formatTime(message.timestamp)}</span>
+              <span className="message-time">
+                {formatTime(message.timestamp)}
+              </span>
             </div>
             <div className="message-text">{message.text}</div>
           </div>
@@ -161,7 +169,7 @@ function App() {
         </button>
       </form>
     </div>
-  );
+  )
 }
 
 export default App
