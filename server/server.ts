@@ -1,37 +1,17 @@
 import express from "express"
-import { WebSocketServer, WebSocket } from "ws"
-import http from "http"
 import cors from "cors"
 
-import { RAProxy } from "./tunnel/server.ts"
+import {
+  Message,
+  IncomingChatMessage,
+  BacklogMessage,
+  BroadcastMessage,
+} from "./types.ts"
 
-interface Message {
-  id: string
-  username: string
-  text: string
-  timestamp: string
-}
-
-interface IncomingChatMessage {
-  type: "chat"
-  username: string
-  text: string
-}
-
-interface BacklogMessage {
-  type: "backlog"
-  messages: Message[]
-  hiddenCount: number
-}
-
-interface BroadcastMessage {
-  type: "message"
-  message: Message
-}
+import { RA } from "../tunnel/server.ts"
 
 const app = express()
-const server = http.createServer(app)
-const wss = new WebSocketServer({ server })
+const { server, wss } = new RA(app)
 
 app.use(cors())
 app.use(express.json())
