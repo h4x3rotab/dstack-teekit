@@ -229,10 +229,15 @@ export class TunnelWebSocket extends EventTarget {
     if (data instanceof ArrayBuffer) {
       return data
     } else if (ArrayBuffer.isView(data)) {
-      return data.buffer.slice(
+      const arrayBuffer = new ArrayBuffer(data.byteLength)
+      const out = new Uint8Array(arrayBuffer)
+      const input = new Uint8Array(
+        data.buffer as ArrayBufferLike,
         data.byteOffset,
-        data.byteOffset + data.byteLength,
+        data.byteLength,
       )
+      out.set(input)
+      return arrayBuffer
     } else {
       throw new Error("Blob data not supported yet")
     }
