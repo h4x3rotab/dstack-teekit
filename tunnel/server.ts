@@ -19,51 +19,59 @@ export class RA {
     this.setupTunnelHandler()
   }
 
-  // Intercept WebSocket connections to handle tunnel requests transparently,
-  // by overriding the `emit` and `on` handlers.
   private setupTunnelHandler(): void {
-    const originalEmit = this.wss.emit.bind(this.wss)
+    this.wss.on("connection", (ws: WebSocket) => {
+      console.log("Setting up tunnel handler")
 
-    this.wss.emit = function (event: string, ...args: any[]): boolean {
-      if (event === "connection") {
-        const ws = args[0] as WebSocket
+      // Intercept messages before they reach application handlers
+      const originalEmit = ws.emit.bind(ws)
 
-        const originalOnMessage = ws.on.bind(ws)
+      ws.emit = function (event: string, ...args: any[]): boolean {
+        if (event === "message") {
+          const data = args[0] as Buffer
+          try {
+            const message = JSON.parse(data.toString())
 
-        ws.on = function (event: string, listener: any): WebSocket {
-          if (event === "message") {
-            // Wrap the original listener to handle tunnel requests first
-            const wrappedListener = (data: Buffer) => {
-              try {
-                const message = JSON.parse(data.toString())
+            if (message.type === "tunnel_request") {
+              console.log(
+                "Tunnel request received:",
+                message.requestId,
+                message.url,
+              )
+              ;(this as any).ra
+                .handleTunnelRequest(ws, message as TunnelRequest)
+                .catch((error: Error) => {
+                  console.error("Error handling tunnel request:", error)
 
-                if (message.type === "tunnel_request") {
-                  ;(this as any).ra.handleTunnelRequest(
-                    ws,
-                    message as TunnelRequest,
-                  )
-                  return
-                }
-              } catch (error) {
-                // If parsing fails, let the original handler deal with it
-              }
+                  // Send 500 error response back to client
+                  const errorResponse = {
+                    type: "tunnel_response",
+                    requestId: message.requestId,
+                    status: 500,
+                    statusText: "Internal Server Error",
+                    headers: {},
+                    body: "",
+                    error: error.message,
+                  }
 
-              // Pass non-tunnel messages to the original listener
-              listener(data)
+                  try {
+                    ws.send(JSON.stringify(errorResponse))
+                  } catch (sendError) {
+                    console.error("Failed to send error response:", sendError)
+                  }
+                })
+              return true
             }
-
-            return originalOnMessage("message", wrappedListener)
+          } catch (error) {
+            // If parsing fails, fall through to application
           }
-
-          // For non-message events, use original behavior
-          return originalOnMessage(event, listener)
         }
 
-        // Store reference to RA instance for tunnel handling
-        ;(ws as any).ra = this
+        // For non-tunnel messages, use original emit
+        return originalEmit(event, ...args)
       }
-      return originalEmit(event, ...args)
-    }.bind(this)
+      ;(ws as any).ra = this
+    })
   }
 
   // Handle tunnel requests by synthesizing `fetch` events and passing
@@ -96,6 +104,9 @@ export class RA {
       })
 
       // Pass responses back through the tunnel
+      // TODO: if ws.send() fails due to connectivity, the client could
+      // get out of sync.
+
       res.on("end", () => {
         const response: TunnelResponse = {
           type: "tunnel_response",
@@ -140,5 +151,4 @@ export class RA {
       ws.send(JSON.stringify(errorResponse))
     }
   }
-
 }
