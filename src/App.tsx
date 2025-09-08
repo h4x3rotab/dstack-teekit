@@ -1,50 +1,8 @@
 import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react"
 import "./App.css"
 
-interface Message {
-  id: string
-  username: string
-  text: string
-  timestamp: string
-}
-
-interface WebSocketMessage {
-  type: "backlog" | "message"
-  messages?: Message[]
-  message?: Message
-  hiddenCount?: number
-}
-
-interface ChatMessage {
-  type: "chat"
-  username: string
-  text: string
-}
-
-interface UptimeData {
-  uptime: {
-    milliseconds: number
-    seconds: number
-    minutes: number
-    hours: number
-    formatted: string
-  }
-}
-
-function generateUsername(): string {
-  const randomNum = Math.floor(Math.random() * 1000000)
-  return `user${randomNum.toString().padStart(6, "0")}`
-}
-
-function getStoredUsername(): string {
-  const stored = localStorage.getItem("chat-username")
-  if (stored) {
-    return stored
-  }
-  const newUsername = generateUsername()
-  localStorage.setItem("chat-username", newUsername)
-  return newUsername
-}
+import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
+import { generateUsername, getStoredUsername } from "./utils.js"
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -66,11 +24,11 @@ function App() {
   useEffect(() => {
     const fetchUptime = async () => {
       try {
-        const response = await fetch('http://localhost:3001/uptime')
+        const response = await fetch("http://localhost:3001/uptime")
         const data: UptimeData = await response.json()
         setUptime(data.uptime.formatted)
       } catch (error) {
-        console.error('Failed to fetch uptime:', error)
+        console.error("Failed to fetch uptime:", error)
       }
     }
 
@@ -164,13 +122,12 @@ function App() {
 
       <div className="messages-container">
         {uptime && (
-          <div className="uptime-display">
-            Server uptime: {uptime}
-          </div>
+          <div className="uptime-display">Server uptime: {uptime}</div>
         )}
         {hiddenMessagesCount > 0 && (
           <div className="hidden-messages-display">
-            {hiddenMessagesCount} earlier message{hiddenMessagesCount !== 1 ? 's' : ''}
+            {hiddenMessagesCount} earlier message
+            {hiddenMessagesCount !== 1 ? "s" : ""}
           </div>
         )}
         {messages.map((message) => (
