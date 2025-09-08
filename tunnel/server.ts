@@ -3,13 +3,24 @@ import { WebSocketServer, WebSocket } from "ws"
 import { Express } from "express"
 import httpMocks from "node-mocks-http"
 import { EventEmitter } from "events"
-import { TunnelRequest, TunnelResponse } from "./types"
+import {
+  TunnelRequest,
+  TunnelResponse,
+  TunnelWebSocketConnect,
+  TunnelWebSocketMessage,
+  TunnelWebSocketClose,
+  TunnelWebSocketEvent,
+} from "./types"
 import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server"
 
 export class RA {
   public server: http.Server
   public wss: WebSocketServer
   private app: Express
+  private webSocketConnections = new Map<
+    string,
+    { ws: WebSocket; tunnelWs: WebSocket }
+  >()
 
   constructor(app: Express) {
     this.app = app
@@ -60,6 +71,27 @@ export class RA {
                     console.error("Failed to send error response:", sendError)
                   }
                 })
+              return true
+            } else if (message.type === "ws_connect") {
+              console.log(
+                "WebSocket connect request:",
+                message.connectionId,
+                message.url,
+              )
+              ;(this as any).ra.handleWebSocketConnect(
+                ws,
+                message as TunnelWebSocketConnect,
+              )
+              return true
+            } else if (message.type === "ws_message") {
+              ;(this as any).ra.handleWebSocketMessage(
+                message as TunnelWebSocketMessage,
+              )
+              return true
+            } else if (message.type === "ws_close") {
+              ;(this as any).ra.handleWebSocketClose(
+                message as TunnelWebSocketClose,
+              )
               return true
             }
           } catch (error) {
@@ -149,6 +181,105 @@ export class RA {
       }
 
       ws.send(JSON.stringify(errorResponse))
+    }
+  }
+
+  async handleWebSocketConnect(
+    tunnelWs: WebSocket,
+    connectReq: TunnelWebSocketConnect,
+  ): Promise<void> {
+    try {
+      console.log(`Creating WebSocket connection to ${connectReq.url}`)
+
+      const ws = new WebSocket(connectReq.url, connectReq.protocols)
+
+      // Store the connection
+      this.webSocketConnections.set(connectReq.connectionId, { ws, tunnelWs })
+
+      ws.on("open", () => {
+        console.log(`WebSocket ${connectReq.connectionId} connected`)
+        const event: TunnelWebSocketEvent = {
+          type: "ws_event",
+          connectionId: connectReq.connectionId,
+          eventType: "open",
+        }
+        tunnelWs.send(JSON.stringify(event))
+      })
+
+      ws.on("message", (data: Buffer) => {
+        const message: TunnelWebSocketMessage = {
+          type: "ws_message",
+          connectionId: connectReq.connectionId,
+          data: data.toString(),
+          dataType: "string", // TODO: Handle binary data
+        }
+        tunnelWs.send(JSON.stringify(message))
+      })
+
+      ws.on("close", (code: number, reason: Buffer) => {
+        console.log(`WebSocket ${connectReq.connectionId} closed`)
+        const event: TunnelWebSocketEvent = {
+          type: "ws_event",
+          connectionId: connectReq.connectionId,
+          eventType: "close",
+          code,
+          reason: reason.toString(),
+        }
+        tunnelWs.send(JSON.stringify(event))
+        this.webSocketConnections.delete(connectReq.connectionId)
+      })
+
+      ws.on("error", (error: Error) => {
+        console.log(
+          `WebSocket ${connectReq.connectionId} error:`,
+          error.message,
+        )
+        const event: TunnelWebSocketEvent = {
+          type: "ws_event",
+          connectionId: connectReq.connectionId,
+          eventType: "error",
+          error: error.message,
+        }
+        tunnelWs.send(JSON.stringify(event))
+      })
+    } catch (error) {
+      console.error("Error creating WebSocket connection:", error)
+      const event: TunnelWebSocketEvent = {
+        type: "ws_event",
+        connectionId: connectReq.connectionId,
+        eventType: "error",
+        error: error instanceof Error ? error.message : "Connection failed",
+      }
+      tunnelWs.send(JSON.stringify(event))
+    }
+  }
+
+  handleWebSocketMessage(messageReq: TunnelWebSocketMessage): void {
+    const connection = this.webSocketConnections.get(messageReq.connectionId)
+    if (connection) {
+      try {
+        connection.ws.send(messageReq.data)
+      } catch (error) {
+        console.error(
+          `Error sending message to WebSocket ${messageReq.connectionId}:`,
+          error,
+        )
+      }
+    }
+  }
+
+  handleWebSocketClose(closeReq: TunnelWebSocketClose): void {
+    const connection = this.webSocketConnections.get(closeReq.connectionId)
+    if (connection) {
+      try {
+        connection.ws.close(closeReq.code, closeReq.reason)
+      } catch (error) {
+        console.error(
+          `Error closing WebSocket ${closeReq.connectionId}:`,
+          error,
+        )
+      }
+      this.webSocketConnections.delete(closeReq.connectionId)
     }
   }
 }

@@ -1,5 +1,11 @@
-import { TunnelRequest, TunnelResponse } from "./types.js"
+import {
+  TunnelRequest,
+  TunnelResponse,
+  TunnelWebSocketEvent,
+  TunnelWebSocketMessage,
+} from "./types.js"
 import { generateRequestId } from "./utils/client.js"
+import { TunnelWebSocket } from "./TunnelWebSocket.js"
 
 export class RA {
   origin: string
@@ -8,6 +14,7 @@ export class RA {
     string,
     { resolve: (response: Response) => void; reject: (error: Error) => void }
   >()
+  private webSocketConnections = new Map<string, TunnelWebSocket>()
   private reconnectDelay = 1000
   private connectionPromise: Promise<void> | null = null
 
@@ -53,6 +60,10 @@ export class RA {
           const message = JSON.parse(event.data)
           if (message.type === "tunnel_response") {
             this.handleTunnelResponse(message as TunnelResponse)
+          } else if (message.type === "ws_event") {
+            this.handleWebSocketEvent(message as TunnelWebSocketEvent)
+          } else if (message.type === "ws_message") {
+            this.handleWebSocketMessage(message as TunnelWebSocketMessage)
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error)
@@ -83,8 +94,35 @@ export class RA {
     pending.resolve(syntheticResponse)
   }
 
+  private handleWebSocketEvent(event: TunnelWebSocketEvent): void {
+    const connection = this.webSocketConnections.get(event.connectionId)
+    if (connection) {
+      connection.handleTunnelEvent(event)
+    }
+  }
+
+  private handleWebSocketMessage(message: TunnelWebSocketMessage): void {
+    const connection = this.webSocketConnections.get(message.connectionId)
+    if (connection) {
+      connection.handleTunnelMessage(message)
+    }
+  }
+
+  public registerWebSocketConnection(connection: TunnelWebSocket): void {
+    this.webSocketConnections.set(connection.connectionId, connection)
+  }
+
+  public unregisterWebSocketConnection(connectionId: string): void {
+    this.webSocketConnections.delete(connectionId)
+  }
+
   get WebSocket() {
-    return WebSocket.bind(window)
+    const self = this
+    return class extends TunnelWebSocket {
+      constructor(url: string, protocols?: string | string[]) {
+        super(self, url, protocols)
+      }
+    }
   }
 
   get fetch() {

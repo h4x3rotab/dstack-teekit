@@ -17,3 +17,33 @@ export type TunnelResponse = {
   body: string
   error?: string
 }
+
+export type TunnelWebSocketConnect = {
+  type: "ws_connect"
+  connectionId: string
+  url: string
+  protocols?: string[]
+}
+
+export type TunnelWebSocketMessage = {
+  type: "ws_message"
+  connectionId: string
+  data: string
+  dataType: "string" | "arraybuffer"
+}
+
+export type TunnelWebSocketClose = {
+  type: "ws_close"
+  connectionId: string
+  code?: number
+  reason?: string
+}
+
+export type TunnelWebSocketEvent = {
+  type: "ws_event"
+  connectionId: string
+  eventType: "open" | "close" | "error"
+  code?: number
+  reason?: string
+  error?: string
+}
