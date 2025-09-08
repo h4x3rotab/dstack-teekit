@@ -1,12 +1,31 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react'
 import './App.css'
 
-function generateUsername() {
+interface Message {
+  id: string;
+  username: string;
+  text: string;
+  timestamp: string;
+}
+
+interface WebSocketMessage {
+  type: 'backlog' | 'message';
+  messages?: Message[];
+  message?: Message;
+}
+
+interface ChatMessage {
+  type: 'chat';
+  username: string;
+  text: string;
+}
+
+function generateUsername(): string {
   const randomNum = Math.floor(Math.random() * 1000000);
   return `user${randomNum.toString().padStart(6, '0')}`;
 }
 
-function getStoredUsername() {
+function getStoredUsername(): string {
   const stored = localStorage.getItem('chat-username');
   if (stored) {
     return stored;
@@ -17,12 +36,12 @@ function getStoredUsername() {
 }
 
 function App() {
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [username] = useState(getStoredUsername);
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState<string>('');
+  const [username] = useState<string>(getStoredUsername);
+  const [connected, setConnected] = useState<boolean>(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,13 +58,13 @@ function App() {
       console.log('Connected to chat server');
     };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    ws.onmessage = (event: MessageEvent) => {
+      const data: WebSocketMessage = JSON.parse(event.data);
       
       if (data.type === 'backlog') {
         setMessages(data.messages || []);
-      } else if (data.type === 'message') {
-        setMessages(prev => [...prev, data.message]);
+      } else if (data.type === 'message' && data.message) {
+        setMessages(prev => [...prev, data.message!]);
       }
     };
 
@@ -54,7 +73,7 @@ function App() {
       console.log('Disconnected from chat server');
     };
 
-    ws.onerror = (error) => {
+    ws.onerror = (error: Event) => {
       console.error('WebSocket error:', error);
       setConnected(false);
     };
@@ -64,25 +83,30 @@ function App() {
     };
   }, []);
 
-  const sendMessage = (e) => {
+  const sendMessage = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (newMessage.trim() && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+      const message: ChatMessage = {
         type: 'chat',
         username: username,
         text: newMessage.trim()
-      }));
+      };
+      wsRef.current.send(JSON.stringify(message));
       setNewMessage('');
     }
   };
 
-  const formatTime = (timestamp) => {
+  const formatTime = (timestamp: string): string => {
     return new Date(timestamp).toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
   };
 
   return (
@@ -117,7 +141,7 @@ function App() {
         <input
           type="text"
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={handleInputChange}
           placeholder="Type your message..."
           disabled={!connected}
           className="message-input"
