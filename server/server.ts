@@ -3,6 +3,8 @@ import { WebSocketServer, WebSocket } from "ws"
 import http from "http"
 import cors from "cors"
 
+import { RAProxy } from "./tunnel/server.ts"
+
 interface Message {
   id: string
   username: string
@@ -40,20 +42,20 @@ const MAX_MESSAGES = 30
 const startTime = Date.now()
 
 // API Routes
-app.get('/uptime', (req, res) => {
+app.get("/uptime", (req, res) => {
   const uptimeMs = Date.now() - startTime
   const uptimeSeconds = Math.floor(uptimeMs / 1000)
   const uptimeMinutes = Math.floor(uptimeSeconds / 60)
   const uptimeHours = Math.floor(uptimeMinutes / 60)
-  
+
   res.json({
     uptime: {
       milliseconds: uptimeMs,
       seconds: uptimeSeconds,
       minutes: uptimeMinutes,
       hours: uptimeHours,
-      formatted: `${uptimeHours}h ${uptimeMinutes % 60}m ${uptimeSeconds % 60}s`
-    }
+      formatted: `${uptimeHours}h ${uptimeMinutes % 60}m ${uptimeSeconds % 60}s`,
+    },
   })
 })
 
@@ -65,7 +67,7 @@ wss.on("connection", (ws: WebSocket) => {
   const backlogMessage: BacklogMessage = {
     type: "backlog",
     messages: messages,
-    hiddenCount: hiddenCount
+    hiddenCount: hiddenCount,
   }
   ws.send(JSON.stringify(backlogMessage))
 

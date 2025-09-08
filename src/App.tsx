@@ -2,7 +2,10 @@ import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react"
 import "./App.css"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
-import { generateUsername, getStoredUsername } from "./utils.js"
+import { getStoredUsername } from "./utils.js"
+import { RA } from "../tunnel/client.js"
+
+const ra = new RA("http://localhost:3001")
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -24,7 +27,7 @@ function App() {
   useEffect(() => {
     const fetchUptime = async () => {
       try {
-        const response = await fetch("http://localhost:3001/uptime")
+        const response = await ra.fetch("http://localhost:3001/uptime")
         const data: UptimeData = await response.json()
         setUptime(data.uptime.formatted)
       } catch (error) {
@@ -39,7 +42,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:3001")
+    const ws = new ra.WebSocket("ws://localhost:3001")
     wsRef.current = ws
 
     ws.onopen = () => {
