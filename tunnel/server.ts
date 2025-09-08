@@ -207,11 +207,24 @@ export class RA {
       })
 
       ws.on("message", (data: Buffer) => {
+        let messageData: string
+        let dataType: "string" | "arraybuffer"
+
+        // Check if data is text or binary
+        if (this.isTextData(data)) {
+          messageData = data.toString()
+          dataType = "string"
+        } else {
+          // Convert binary data to base64
+          messageData = data.toString("base64")
+          dataType = "arraybuffer"
+        }
+
         const message: TunnelWebSocketMessage = {
           type: "ws_message",
           connectionId: connectReq.connectionId,
-          data: data.toString(),
-          dataType: "string", // TODO: Handle binary data
+          data: messageData,
+          dataType: dataType,
         }
         tunnelWs.send(JSON.stringify(message))
       })
@@ -258,7 +271,14 @@ export class RA {
     const connection = this.webSocketConnections.get(messageReq.connectionId)
     if (connection) {
       try {
-        connection.ws.send(messageReq.data)
+        let dataToSend: string | Buffer
+        if (messageReq.dataType === "arraybuffer") {
+          // Convert base64 back to binary data
+          dataToSend = Buffer.from(messageReq.data, "base64")
+        } else {
+          dataToSend = messageReq.data
+        }
+        connection.ws.send(dataToSend)
       } catch (error) {
         console.error(
           `Error sending message to WebSocket ${messageReq.connectionId}:`,
@@ -281,5 +301,17 @@ export class RA {
       }
       this.webSocketConnections.delete(closeReq.connectionId)
     }
+  }
+
+  private isTextData(data: Buffer): boolean {
+    // Simple heuristic to detect if data is likely text
+    // Check for null bytes and high-bit characters
+    for (let i = 0; i < Math.min(data.length, 1024); i++) {
+      const byte = data[i]
+      if (byte === 0 || (byte > 127 && byte < 160)) {
+        return false
+      }
+    }
+    return true
   }
 }

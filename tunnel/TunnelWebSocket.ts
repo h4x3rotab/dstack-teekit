@@ -73,7 +73,14 @@ export class TunnelWebSocket extends EventTarget {
   public send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     if (this.readyState === this.CONNECTING) {
       // Queue messages until connection is open
-      this.messageQueue.push(String(data))
+      if (typeof data === "string") {
+        this.messageQueue.push(data)
+      } else {
+        // Convert binary data to base64 for queueing
+        const arrayBuffer = this.toArrayBuffer(data)
+        const base64 = this.arrayBufferToBase64(arrayBuffer)
+        this.messageQueue.push(`binary:${base64}`)
+      }
       return
     }
 
@@ -81,11 +88,24 @@ export class TunnelWebSocket extends EventTarget {
       throw new Error("WebSocket is not open")
     }
 
+    let messageData: string
+    let dataType: "string" | "arraybuffer"
+
+    if (typeof data === "string") {
+      messageData = data
+      dataType = "string"
+    } else {
+      // Convert binary data to base64 for transport
+      const arrayBuffer = this.toArrayBuffer(data)
+      messageData = this.arrayBufferToBase64(arrayBuffer)
+      dataType = "arraybuffer"
+    }
+
     const message: TunnelWebSocketMessage = {
       type: "ws_message",
       connectionId: this.connectionId,
-      data: String(data), // For now, convert everything to string
-      dataType: "string",
+      data: messageData,
+      dataType: dataType,
     }
 
     try {
@@ -136,7 +156,14 @@ export class TunnelWebSocket extends EventTarget {
         // Send any queued messages
         while (this.messageQueue.length > 0) {
           const queuedData = this.messageQueue.shift()!
-          this.send(queuedData)
+          if (queuedData.startsWith("binary:")) {
+            // Decode base64 back to ArrayBuffer
+            const base64 = queuedData.substring(7)
+            const arrayBuffer = this.base64ToArrayBuffer(base64)
+            this.send(arrayBuffer)
+          } else {
+            this.send(queuedData)
+          }
         }
 
         const openEvent = new Event("open")
@@ -169,9 +196,15 @@ export class TunnelWebSocket extends EventTarget {
   public handleTunnelMessage(message: TunnelWebSocketMessage): void {
     if (this.readyState !== this.OPEN) return
 
+    let messageData: any
+    if (message.dataType === "arraybuffer") {
+      messageData = this.base64ToArrayBuffer(message.data)
+    } else {
+      messageData = message.data
+    }
+
     const messageEvent = new MessageEvent("message", {
-      data: message.data,
-      // TODO: Handle binary data when dataType is 'arraybuffer'
+      data: messageData,
     })
 
     this.dispatchEvent(messageEvent)
@@ -188,5 +221,38 @@ export class TunnelWebSocket extends EventTarget {
     if (this.onerror) {
       this.onerror.call(this as any, errorEvent)
     }
+  }
+
+  private toArrayBuffer(
+    data: ArrayBufferLike | Blob | ArrayBufferView,
+  ): ArrayBuffer {
+    if (data instanceof ArrayBuffer) {
+      return data
+    } else if (ArrayBuffer.isView(data)) {
+      return data.buffer.slice(
+        data.byteOffset,
+        data.byteOffset + data.byteLength,
+      )
+    } else {
+      throw new Error("Blob data not supported yet")
+    }
+  }
+
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer)
+    let binary = ""
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    return btoa(binary)
+  }
+
+  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    return bytes.buffer
   }
 }
