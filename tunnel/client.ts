@@ -12,8 +12,9 @@ import sodium from "libsodium-wrappers"
 
 export class RA {
   public ws: WebSocket | null = null
-  public serverX25519PublicKey: Uint8Array | null = null
-  public symmetricKey: Uint8Array | null = null
+
+  public serverX25519PublicKey?: Uint8Array
+  public symmetricKey?: Uint8Array // 32 byte key for XSalsa20-Poly1305
 
   private pendingRequests = new Map<
     string,
@@ -71,41 +72,38 @@ export class RA {
         try {
           const message = JSON.parse(event.data)
           if (message.type === "server_kx") {
-            ;(async () => {
-              try {
-                await sodium.ready
-                const serverKx = message as TunnelServerKX
-                const serverPub = sodium.from_base64(
-                  serverKx.x25519PublicKey,
+            try {
+              const serverKx = message as TunnelServerKX
+              const serverPub = sodium.from_base64(
+                serverKx.x25519PublicKey,
+                sodium.base64_variants.ORIGINAL
+              )
+
+              const symmetricKey = sodium.crypto_secretbox_keygen()
+              const sealed = sodium.crypto_box_seal(symmetricKey, serverPub)
+
+              this.serverX25519PublicKey = serverPub
+              this.symmetricKey = symmetricKey
+
+              const reply: TunnelClientKX = {
+                type: "client_kx",
+                sealedSymmetricKey: sodium.to_base64(
+                  sealed,
                   sodium.base64_variants.ORIGINAL
-                )
-
-                const symmetricKey = sodium.crypto_secretbox_keygen()
-                const sealed = sodium.crypto_box_seal(symmetricKey, serverPub)
-
-                this.serverX25519PublicKey = serverPub
-                this.symmetricKey = symmetricKey
-
-                const reply: TunnelClientKX = {
-                  type: "client_kx",
-                  sealedSymmetricKey: sodium.to_base64(
-                    sealed,
-                    sodium.base64_variants.ORIGINAL
-                  ),
-                }
-                this.send(reply)
-
-                this.connectionPromise = null
-                resolve()
-              } catch (e) {
-                this.connectionPromise = null
-                reject(
-                  e instanceof Error
-                    ? e
-                    : new Error("Failed to process server_kx message")
-                )
+                ),
               }
-            })()
+              this.send(reply)
+
+              this.connectionPromise = null
+              resolve()
+            } catch (e) {
+              this.connectionPromise = null
+              reject(
+                e instanceof Error
+                  ? e
+                  : new Error("Failed to process server_kx message")
+              )
+            }
           } else if (message.type === "http_response") {
             this.handleTunnelResponse(message as TunnelHTTPResponse)
           } else if (message.type === "ws_event") {
