@@ -18,15 +18,22 @@ export class RA {
   public server: http.Server
   public wss: WebSocketServer
   public x25519PublicKey: Uint8Array
+  private x25519PrivateKey: Uint8Array
 
   private webSocketConnections = new Map<
     string,
     { ws: WebSocket; tunnelWs: WebSocket }
   >()
+  private symmetricKeyBySocket = new Map<WebSocket, Uint8Array>()
 
-  constructor(private app: Express, publicKey: Uint8Array) {
+  constructor(
+    private app: Express,
+    publicKey: Uint8Array,
+    privateKey: Uint8Array
+  ) {
     this.app = app
     this.x25519PublicKey = publicKey
+    this.x25519PrivateKey = privateKey
     this.server = http.createServer(app)
     this.wss = new WebSocketServer({ server: this.server })
 
@@ -35,8 +42,8 @@ export class RA {
 
   static async initialize(app: Express): Promise<RA> {
     await sodium.ready
-    const { publicKey } = sodium.crypto_kx_keypair()
-    return new RA(app, publicKey)
+    const { publicKey, privateKey } = sodium.crypto_box_keypair()
+    return new RA(app, publicKey, privateKey)
   }
 
   /**
@@ -60,12 +67,49 @@ export class RA {
         console.error("Failed to send server_kx message:", e)
       }
 
+      // Cleanup on close
+      ws.on("close", () => {
+        this.symmetricKeyBySocket.delete(ws)
+      })
+
       ws.emit = function (event: string, ...args: any[]): boolean {
         if (event === "message") {
           const data = args[0] as Buffer
           try {
             const message = JSON.parse(data.toString())
             const ra = (this as any).ra as RA
+
+            // Handle client key exchange
+            if (message.type === "client_kx") {
+              try {
+                // Only accept a single symmetric key per WebSocket
+                if (!ra.symmetricKeyBySocket.has(ws)) {
+                  const sealed = sodium.from_base64(
+                    message.sealedSymmetricKey,
+                    sodium.base64_variants.ORIGINAL
+                  )
+                  const opened = sodium.crypto_box_seal_open(
+                    sealed,
+                    ra.x25519PublicKey,
+                    ra.x25519PrivateKey
+                  )
+                  ra.symmetricKeyBySocket.set(ws, opened)
+                } else {
+                  console.warn(
+                    "client_kx received after key already set; ignoring"
+                  )
+                }
+              } catch (e) {
+                console.error("Failed to process client_kx:", e)
+              }
+              return true
+            }
+
+            // If handshake not complete yet, ignore any other messages
+            if (!ra.symmetricKeyBySocket.has(ws)) {
+              console.warn("Dropping message before handshake completion")
+              return true
+            }
 
             if (message.type === "http_request") {
               console.log(
