@@ -36,7 +36,7 @@ export class TunnelWebSocket extends EventTarget {
     this.connectionId = generateConnectionId()
 
     // Register this connection with the RA instance
-    ra.registerWebSocketConnection(this)
+    ra.registerWebSocketTunnel(this)
 
     // Send connection request through tunnel
     this.connect(protocols)
@@ -60,7 +60,7 @@ export class TunnelWebSocket extends EventTarget {
       }
 
       if (this.ra.ws && this.ra.ws.readyState === WebSocket.OPEN) {
-        this.ra.ws.send(JSON.stringify(connectMessage))
+        this.ra.send(connectMessage)
       } else {
         throw new Error("Tunnel WebSocket not connected")
       }
@@ -111,7 +111,7 @@ export class TunnelWebSocket extends EventTarget {
 
     try {
       if (this.ra.ws && this.ra.ws.readyState === WebSocket.OPEN) {
-        this.ra.ws.send(JSON.stringify(message))
+        this.ra.send(message)
         this.bufferedAmount += String(data).length
       } else {
         throw new Error("Tunnel WebSocket not connected")
@@ -137,14 +137,14 @@ export class TunnelWebSocket extends EventTarget {
 
     try {
       if (this.ra.ws && this.ra.ws.readyState === WebSocket.OPEN) {
-        this.ra.ws.send(JSON.stringify(closeMessage))
+        this.ra.send(closeMessage)
       }
     } catch (error) {
       console.error("Error sending close message:", error)
     }
 
     // Clean up
-    this.ra.unregisterWebSocketConnection(this.connectionId)
+    this.ra.unregisterWebSocketTunnel(this.connectionId)
   }
 
   // Handle events from the tunnel
@@ -185,7 +185,7 @@ export class TunnelWebSocket extends EventTarget {
         if (this.onclose) {
           this.onclose.call(this as any, closeEvent)
         }
-        this.ra.unregisterWebSocketConnection(this.connectionId)
+        this.ra.unregisterWebSocketTunnel(this.connectionId)
         break
 
       case "error":

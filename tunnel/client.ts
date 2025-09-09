@@ -22,8 +22,11 @@ export class RA {
     this.origin = origin
   }
 
-  // Wait for a connection on `this.ws`, creating a new WebSocket to
-  // replace this.ws if necessary.
+  /**
+   * Helper for establishing connections. Waits for a connection on `this.ws`,
+   * creating a new WebSocket to replace this.ws if necessary.
+   */
+
   public async ensureConnection(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return Promise.resolve()
@@ -61,9 +64,9 @@ export class RA {
           if (message.type === "tunnel_response") {
             this.handleTunnelResponse(message as TunnelResponse)
           } else if (message.type === "ws_event") {
-            this.handleWebSocketEvent(message as TunnelWebSocketEvent)
+            this.handleWebSocketTunnelEvent(message as TunnelWebSocketEvent)
           } else if (message.type === "ws_message") {
-            this.handleWebSocketMessage(message as TunnelWebSocketMessage)
+            this.handleWebSocketTunnelMessage(message as TunnelWebSocketMessage)
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error)
@@ -72,6 +75,20 @@ export class RA {
     })
 
     return this.connectionPromise
+  }
+
+  /**
+   * Low-level interfaces to the encrypted WebSocket.
+   */
+
+  public send(message: unknown): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const data =
+        typeof message === "string" ? message : JSON.stringify(message)
+      this.ws.send(data)
+    } else {
+      throw new Error("WebSocket not connected")
+    }
   }
 
   private handleTunnelResponse(response: TunnelResponse): void {
@@ -94,27 +111,35 @@ export class RA {
     pending.resolve(syntheticResponse)
   }
 
-  private handleWebSocketEvent(event: TunnelWebSocketEvent): void {
+  private handleWebSocketTunnelEvent(event: TunnelWebSocketEvent): void {
     const connection = this.webSocketConnections.get(event.connectionId)
     if (connection) {
       connection.handleTunnelEvent(event)
     }
   }
 
-  private handleWebSocketMessage(message: TunnelWebSocketMessage): void {
+  private handleWebSocketTunnelMessage(message: TunnelWebSocketMessage): void {
     const connection = this.webSocketConnections.get(message.connectionId)
     if (connection) {
       connection.handleTunnelMessage(message)
     }
   }
 
-  public registerWebSocketConnection(connection: TunnelWebSocket): void {
+  /**
+   * Register and unregister WebSocket mocks.
+   */
+
+  public registerWebSocketTunnel(connection: TunnelWebSocket): void {
     this.webSocketConnections.set(connection.connectionId, connection)
   }
 
-  public unregisterWebSocketConnection(connectionId: string): void {
+  public unregisterWebSocketTunnel(connectionId: string): void {
     this.webSocketConnections.delete(connectionId)
   }
+
+  /**
+   * Client methods for encrypted `fetch` and encrypted WebSockets.
+   */
 
   get WebSocket() {
     const self = this
@@ -177,13 +202,18 @@ export class RA {
       return new Promise<Response>((resolve, reject) => {
         this.pendingRequests.set(requestId, { resolve, reject })
 
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify(tunnelRequest))
-        } else {
-          reject(new Error("WebSocket not connected"))
+        try {
+          this.send(tunnelRequest)
+        } catch (error) {
+          reject(
+            error instanceof Error
+              ? error
+              : new Error("WebSocket not connected")
+          )
+          return
         }
 
-        // Timeout handling
+        // Time out fetch requests after 30 seconds.
         setTimeout(() => {
           if (this.pendingRequests.has(requestId)) {
             this.pendingRequests.delete(requestId)
