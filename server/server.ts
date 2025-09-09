@@ -1,5 +1,6 @@
 import express from "express"
 import cors from "cors"
+import { WebSocket } from "ws"
 
 import {
   Message,
@@ -11,7 +12,7 @@ import {
 import { RA } from "../tunnel/server.ts"
 
 const app = express()
-const { server, wss } = new RA(app)
+const { server, wss } = await RA.initialize(app)
 
 app.use(cors())
 app.use(express.json())

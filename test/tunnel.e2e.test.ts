@@ -66,7 +66,7 @@ async function startTunnelApp() {
     res.status(200).json({ received: (req as any).body })
   })
 
-  const tunnelServer = new TunnelServer(app)
+  const tunnelServer = await TunnelServer.initialize(app)
 
   await new Promise<void>((resolve) => {
     tunnelServer.server.listen(0, "127.0.0.1", () => resolve())
@@ -75,7 +75,7 @@ async function startTunnelApp() {
   const address = tunnelServer.server.address() as AddressInfo
   const origin = `http://127.0.0.1:${address.port}`
 
-  const tunnelClient = new TunnelClient(origin)
+  const tunnelClient = await TunnelClient.initialize(origin)
 
   return { tunnelServer, tunnelClient, origin }
 }

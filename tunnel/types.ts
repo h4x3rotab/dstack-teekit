@@ -47,3 +47,16 @@ export type TunnelWSServerEvent = {
   reason?: string
   error?: string
 }
+
+// Sent by the tunnel server to announce its key exchange public key.
+// The public key is X25519, base64-encoded.
+export type TunnelServerKX = {
+  type: "server_kx"
+  x25519PublicKey: string
+}
+
+// Sent by the client to deliver a symmetric key sealed to the server pubkey.
+export type TunnelClientKX = {
+  type: "client_kx"
+  sealedSymmetricKey: string
+}

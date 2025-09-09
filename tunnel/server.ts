@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from "ws"
 import { Express } from "express"
 import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
-import * as sodium from "libsodium-wrappers"
+import sodium from "libsodium-wrappers"
 import {
   TunnelHTTPRequest,
   TunnelHTTPResponse,
@@ -11,24 +11,32 @@ import {
   TunnelWSMessage,
   TunnelWSClientClose,
   TunnelWSServerEvent,
-} from "./types"
-import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server"
+} from "./types.js"
+import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server.js"
 
 export class RA {
   public server: http.Server
   public wss: WebSocketServer
+  public x25519PublicKey: Uint8Array
 
   private webSocketConnections = new Map<
     string,
     { ws: WebSocket; tunnelWs: WebSocket }
   >()
 
-  constructor(private app: Express) {
+  constructor(private app: Express, publicKey: Uint8Array) {
     this.app = app
+    this.x25519PublicKey = publicKey
     this.server = http.createServer(app)
     this.wss = new WebSocketServer({ server: this.server })
 
     this.setupWebSocketHandler()
+  }
+
+  static async initialize(app: Express): Promise<RA> {
+    await sodium.ready
+    const { publicKey } = sodium.crypto_kx_keypair()
+    return new RA(app, publicKey)
   }
 
   /**
@@ -40,6 +48,17 @@ export class RA {
 
       // Intercept messages before they reach application handlers
       const originalEmit = ws.emit.bind(ws)
+
+      // Immediately announce server key-exchange public key to the client
+      try {
+        const serverKxMessage = {
+          type: "server_kx",
+          x25519PublicKey: Buffer.from(this.x25519PublicKey).toString("base64"),
+        }
+        ws.send(JSON.stringify(serverKxMessage))
+      } catch (e) {
+        console.error("Failed to send server_kx message:", e)
+      }
 
       ws.emit = function (event: string, ...args: any[]): boolean {
         if (event === "message") {
@@ -101,6 +120,7 @@ export class RA {
           return originalEmit(event, ...args)
         } else {
           console.error(event, ...args)
+          return true
         }
       }
       ;(ws as any).ra = this
