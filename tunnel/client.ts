@@ -1,8 +1,8 @@
 import {
   TunnelHTTPRequest,
   TunnelHTTPResponse,
-  TunnelWebSocketEvent,
-  TunnelWebSocketMessage,
+  TunnelWSServerEvent,
+  TunnelWSMessage,
 } from "./types.js"
 import { generateRequestId } from "./utils/client.js"
 import { TunnelWebSocket } from "./TunnelWebSocket.js"
@@ -64,9 +64,9 @@ export class RA {
           if (message.type === "http_response") {
             this.handleTunnelResponse(message as TunnelHTTPResponse)
           } else if (message.type === "ws_event") {
-            this.handleWebSocketTunnelEvent(message as TunnelWebSocketEvent)
+            this.handleWebSocketTunnelEvent(message as TunnelWSServerEvent)
           } else if (message.type === "ws_message") {
-            this.handleWebSocketTunnelMessage(message as TunnelWebSocketMessage)
+            this.handleWebSocketTunnelMessage(message as TunnelWSMessage)
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error)
@@ -111,14 +111,14 @@ export class RA {
     pending.resolve(syntheticResponse)
   }
 
-  private handleWebSocketTunnelEvent(event: TunnelWebSocketEvent): void {
+  private handleWebSocketTunnelEvent(event: TunnelWSServerEvent): void {
     const connection = this.webSocketConnections.get(event.connectionId)
     if (connection) {
       connection.handleTunnelEvent(event)
     }
   }
 
-  private handleWebSocketTunnelMessage(message: TunnelWebSocketMessage): void {
+  private handleWebSocketTunnelMessage(message: TunnelWSMessage): void {
     const connection = this.webSocketConnections.get(message.connectionId)
     if (connection) {
       connection.handleTunnelMessage(message)

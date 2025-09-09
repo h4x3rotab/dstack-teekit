@@ -1,8 +1,8 @@
 import {
-  TunnelWebSocketConnect,
-  TunnelWebSocketMessage,
-  TunnelWebSocketClose,
-  TunnelWebSocketEvent,
+  TunnelWSClientConnect,
+  TunnelWSMessage,
+  TunnelWSClientClose,
+  TunnelWSServerEvent,
 } from "./types.js"
 import { generateConnectionId } from "./utils/client.js"
 import { RA } from "./client.js"
@@ -52,7 +52,7 @@ export class TunnelWebSocket extends EventTarget {
           : [protocols]
         : undefined
 
-      const connectMessage: TunnelWebSocketConnect = {
+      const connectMessage: TunnelWSClientConnect = {
         type: "ws_connect",
         connectionId: this.connectionId,
         url: this.url,
@@ -102,7 +102,7 @@ export class TunnelWebSocket extends EventTarget {
       dataType = "arraybuffer"
     }
 
-    const message: TunnelWebSocketMessage = {
+    const message: TunnelWSMessage = {
       type: "ws_message",
       connectionId: this.connectionId,
       data: messageData,
@@ -128,7 +128,7 @@ export class TunnelWebSocket extends EventTarget {
 
     this.readyState = this.CLOSING
 
-    const closeMessage: TunnelWebSocketClose = {
+    const closeMessage: TunnelWSClientClose = {
       type: "ws_close",
       connectionId: this.connectionId,
       code,
@@ -148,7 +148,7 @@ export class TunnelWebSocket extends EventTarget {
   }
 
   // Handle events from the tunnel
-  public handleTunnelEvent(event: TunnelWebSocketEvent): void {
+  public handleTunnelEvent(event: TunnelWSServerEvent): void {
     switch (event.eventType) {
       case "open":
         this.readyState = this.OPEN
@@ -194,7 +194,7 @@ export class TunnelWebSocket extends EventTarget {
     }
   }
 
-  public handleTunnelMessage(message: TunnelWebSocketMessage): void {
+  public handleTunnelMessage(message: TunnelWSMessage): void {
     if (this.readyState !== this.OPEN) return
 
     let messageData: any

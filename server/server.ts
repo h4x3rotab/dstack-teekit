@@ -34,7 +34,9 @@ app.get("/uptime", (req, res) => {
       seconds: uptimeSeconds,
       minutes: uptimeMinutes,
       hours: uptimeHours,
-      formatted: `${uptimeHours}h ${uptimeMinutes % 60}m ${uptimeSeconds % 60}s`,
+      formatted: `${uptimeHours}h ${uptimeMinutes % 60}m ${
+        uptimeSeconds % 60
+      }s`,
     },
   })
 })

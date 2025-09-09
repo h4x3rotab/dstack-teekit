@@ -3,13 +3,14 @@ import { WebSocketServer, WebSocket } from "ws"
 import { Express } from "express"
 import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
+import * as sodium from "libsodium-wrappers"
 import {
   TunnelHTTPRequest,
   TunnelHTTPResponse,
-  TunnelWSConnect,
+  TunnelWSClientConnect,
   TunnelWSMessage,
-  TunnelWSClose,
-  TunnelWSEvent,
+  TunnelWSClientClose,
+  TunnelWSServerEvent,
 } from "./types"
 import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server"
 
@@ -27,10 +28,13 @@ export class RA {
     this.server = http.createServer(app)
     this.wss = new WebSocketServer({ server: this.server })
 
-    this.setupTunnelHandler()
+    this.setupWebSocketHandler()
   }
 
-  private setupTunnelHandler(): void {
+  /**
+   * Intercept incoming WebSocket messages on `this.wss`.
+   */
+  private setupWebSocketHandler(): void {
     this.wss.on("connection", (ws: WebSocket) => {
       console.log("Setting up tunnel handler")
 
@@ -42,6 +46,7 @@ export class RA {
           const data = args[0] as Buffer
           try {
             const message = JSON.parse(data.toString())
+            const ra = (this as any).ra as RA
 
             if (message.type === "http_request") {
               console.log(
@@ -49,64 +54,60 @@ export class RA {
                 message.requestId,
                 message.url
               )
-              ;(this as any).ra
-                .handleTunnelRequest(ws, message as TunnelHTTPRequest)
-                .catch((error: Error) => {
-                  console.error("Error handling tunnel request:", error)
+              ra.handleTunnelHttpRequest(
+                ws,
+                message as TunnelHTTPRequest
+              ).catch((error: Error) => {
+                console.error("Error handling tunnel request:", error)
 
-                  // Send 500 error response back to client
-                  const errorResponse = {
-                    type: "http_response",
-                    requestId: message.requestId,
-                    status: 500,
-                    statusText: "Internal Server Error",
-                    headers: {},
-                    body: "",
-                    error: error.message,
-                  }
+                // Send 500 error response back to client
+                const errorResponse = {
+                  type: "http_response",
+                  requestId: message.requestId,
+                  status: 500,
+                  statusText: "Internal Server Error",
+                  headers: {},
+                  body: "",
+                  error: error.message,
+                }
 
-                  try {
-                    ws.send(JSON.stringify(errorResponse))
-                  } catch (sendError) {
-                    console.error("Failed to send error response:", sendError)
-                  }
-                })
+                try {
+                  ws.send(JSON.stringify(errorResponse))
+                } catch (sendError) {
+                  console.error("Failed to send error response:", sendError)
+                }
+              })
               return true
             } else if (message.type === "ws_connect") {
-              console.log(
-                "WebSocket connect request:",
-                message.connectionId,
-                message.url
-              )
-              ;(this as any).ra.handleWebSocketConnect(
+              ra.handleTunnelWebSocketConnect(
                 ws,
-                message as TunnelWSConnect
+                message as TunnelWSClientConnect
               )
               return true
             } else if (message.type === "ws_message") {
-              ;(this as any).ra.handleWebSocketMessage(
-                message as TunnelWSMessage
-              )
+              ra.handleTunnelWebSocketMessage(message as TunnelWSMessage)
               return true
             } else if (message.type === "ws_close") {
-              ;(this as any).ra.handleWebSocketClose(message as TunnelWSClose)
+              ra.handleTunnelWebSocketClose(message as TunnelWSClientClose)
               return true
             }
           } catch (error) {
-            // If parsing fails, fall through to application
+            console.error(error)
           }
         }
 
-        // For non-tunnel messages, use original emit
-        return originalEmit(event, ...args)
+        // Discard non-tunnel messages other than close
+        if (event === "close") {
+          return originalEmit(event, ...args)
+        } else {
+          console.error(event, ...args)
+        }
       }
       ;(ws as any).ra = this
     })
   }
-
-  // Handle tunnel requests by synthesizing `fetch` events and passing
-  // them to express
-  async handleTunnelRequest(
+  // Handle tunnel requests by synthesizing `fetch` events and passing to Express
+  async handleTunnelHttpRequest(
     ws: WebSocket,
     tunnelReq: TunnelHTTPRequest
   ): Promise<void> {
@@ -182,9 +183,9 @@ export class RA {
     }
   }
 
-  async handleWebSocketConnect(
+  async handleTunnelWebSocketConnect(
     tunnelWs: WebSocket,
-    connectReq: TunnelWSConnect
+    connectReq: TunnelWSClientConnect
   ): Promise<void> {
     try {
       console.log(`Creating WebSocket connection to ${connectReq.url}`)
@@ -196,7 +197,7 @@ export class RA {
 
       ws.on("open", () => {
         console.log(`WebSocket ${connectReq.connectionId} connected`)
-        const event: TunnelWSEvent = {
+        const event: TunnelWSServerEvent = {
           type: "ws_event",
           connectionId: connectReq.connectionId,
           eventType: "open",
@@ -229,7 +230,7 @@ export class RA {
 
       ws.on("close", (code: number, reason: Buffer) => {
         console.log(`WebSocket ${connectReq.connectionId} closed`)
-        const event: TunnelWSEvent = {
+        const event: TunnelWSServerEvent = {
           type: "ws_event",
           connectionId: connectReq.connectionId,
           eventType: "close",
@@ -245,7 +246,7 @@ export class RA {
           `WebSocket ${connectReq.connectionId} error:`,
           error.message
         )
-        const event: TunnelWSEvent = {
+        const event: TunnelWSServerEvent = {
           type: "ws_event",
           connectionId: connectReq.connectionId,
           eventType: "error",
@@ -255,7 +256,7 @@ export class RA {
       })
     } catch (error) {
       console.error("Error creating WebSocket connection:", error)
-      const event: TunnelWSEvent = {
+      const event: TunnelWSServerEvent = {
         type: "ws_event",
         connectionId: connectReq.connectionId,
         eventType: "error",
@@ -265,7 +266,7 @@ export class RA {
     }
   }
 
-  handleWebSocketMessage(messageReq: TunnelWSMessage): void {
+  handleTunnelWebSocketMessage(messageReq: TunnelWSMessage): void {
     const connection = this.webSocketConnections.get(messageReq.connectionId)
     if (connection) {
       try {
@@ -286,7 +287,7 @@ export class RA {
     }
   }
 
-  handleWebSocketClose(closeReq: TunnelWSClose): void {
+  handleTunnelWebSocketClose(closeReq: TunnelWSClientClose): void {
     const connection = this.webSocketConnections.get(closeReq.connectionId)
     if (connection) {
       try {
