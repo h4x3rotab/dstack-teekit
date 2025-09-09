@@ -1,6 +1,6 @@
 import {
-  TunnelRequest,
-  TunnelResponse,
+  TunnelHTTPRequest,
+  TunnelHTTPResponse,
   TunnelWebSocketEvent,
   TunnelWebSocketMessage,
 } from "./types.js"
@@ -61,8 +61,8 @@ export class RA {
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          if (message.type === "tunnel_response") {
-            this.handleTunnelResponse(message as TunnelResponse)
+          if (message.type === "http_response") {
+            this.handleTunnelResponse(message as TunnelHTTPResponse)
           } else if (message.type === "ws_event") {
             this.handleWebSocketTunnelEvent(message as TunnelWebSocketEvent)
           } else if (message.type === "ws_message") {
@@ -91,7 +91,7 @@ export class RA {
     }
   }
 
-  private handleTunnelResponse(response: TunnelResponse): void {
+  private handleTunnelResponse(response: TunnelHTTPResponse): void {
     const pending = this.pendingRequests.get(response.requestId)
     if (!pending) return
 
@@ -190,8 +190,8 @@ export class RA {
       }
 
       const requestId = generateRequestId()
-      const tunnelRequest: TunnelRequest = {
-        type: "tunnel_request",
+      const tunnelRequest: TunnelHTTPRequest = {
+        type: "http_request",
         requestId,
         method,
         url,

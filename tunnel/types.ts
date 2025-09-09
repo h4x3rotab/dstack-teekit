@@ -1,5 +1,5 @@
-export type TunnelRequest = {
-  type: "tunnel_request"
+export type TunnelHTTPRequest = {
+  type: "http_request"
   requestId: string
   method: string
   url: string
@@ -8,8 +8,8 @@ export type TunnelRequest = {
   timeout?: number
 }
 
-export type TunnelResponse = {
-  type: "tunnel_response"
+export type TunnelHTTPResponse = {
+  type: "http_response"
   requestId: string
   status: number
   statusText: string
@@ -18,6 +18,7 @@ export type TunnelResponse = {
   error?: string
 }
 
+// client-sent connect event
 export type TunnelWebSocketConnect = {
   type: "ws_connect"
   connectionId: string
@@ -25,13 +26,7 @@ export type TunnelWebSocketConnect = {
   protocols?: string[]
 }
 
-export type TunnelWebSocketMessage = {
-  type: "ws_message"
-  connectionId: string
-  data: string
-  dataType: "string" | "arraybuffer"
-}
-
+// client-sent close event
 export type TunnelWebSocketClose = {
   type: "ws_close"
   connectionId: string
@@ -39,6 +34,15 @@ export type TunnelWebSocketClose = {
   reason?: string
 }
 
+// client-side and server-side messages
+export type TunnelWebSocketMessage = {
+  type: "ws_message"
+  connectionId: string
+  data: string
+  dataType: "string" | "arraybuffer"
+}
+
+// server-sent events
 export type TunnelWebSocketEvent = {
   type: "ws_event"
   connectionId: string
