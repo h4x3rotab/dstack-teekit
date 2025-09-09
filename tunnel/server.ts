@@ -11,6 +11,7 @@ import {
   TunnelWSMessage,
   TunnelWSClientClose,
   TunnelWSServerEvent,
+  TunnelEncrypted,
 } from "./types.js"
 import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server.js"
 
@@ -29,7 +30,7 @@ export class RA {
   constructor(
     private app: Express,
     publicKey: Uint8Array,
-    privateKey: Uint8Array
+    privateKey: Uint8Array,
   ) {
     this.app = app
     this.x25519PublicKey = publicKey
@@ -76,7 +77,7 @@ export class RA {
         if (event === "message") {
           const data = args[0] as Buffer
           try {
-            const message = JSON.parse(data.toString())
+            let message = JSON.parse(data.toString())
             const ra = (this as any).ra as RA
 
             // Handle client key exchange
@@ -86,17 +87,17 @@ export class RA {
                 if (!ra.symmetricKeyBySocket.has(ws)) {
                   const sealed = sodium.from_base64(
                     message.sealedSymmetricKey,
-                    sodium.base64_variants.ORIGINAL
+                    sodium.base64_variants.ORIGINAL,
                   )
                   const opened = sodium.crypto_box_seal_open(
                     sealed,
                     ra.x25519PublicKey,
-                    ra.x25519PrivateKey
+                    ra.x25519PrivateKey,
                   )
                   ra.symmetricKeyBySocket.set(ws, opened)
                 } else {
                   console.warn(
-                    "client_kx received after key already set; ignoring"
+                    "client_kx received after key already set; ignoring",
                   )
                 }
               } catch (e) {
@@ -111,31 +112,48 @@ export class RA {
               return true
             }
 
+            // Require encryption post-handshake
+            if (message.type !== "enc") {
+              console.warn("Dropping non-encrypted message post-handshake")
+              return true
+            }
+
+            // Decrypt envelope messages post-handshake
+            if (message.type === "enc") {
+              try {
+                message = ra.decryptEnvelopeForSocket(
+                  ws,
+                  message as TunnelEncrypted,
+                )
+              } catch (e) {
+                console.error("Failed to decrypt envelope:", e)
+                return true
+              }
+            }
+
             if (message.type === "http_request") {
               console.log(
                 "Tunnel request received:",
                 message.requestId,
-                message.url
+                message.url,
               )
               ra.handleTunnelHttpRequest(
                 ws,
-                message as TunnelHTTPRequest
+                message as TunnelHTTPRequest,
               ).catch((error: Error) => {
                 console.error("Error handling tunnel request:", error)
 
                 // Send 500 error response back to client
-                const errorResponse = {
-                  type: "http_response",
-                  requestId: message.requestId,
-                  status: 500,
-                  statusText: "Internal Server Error",
-                  headers: {},
-                  body: "",
-                  error: error.message,
-                }
-
                 try {
-                  ws.send(JSON.stringify(errorResponse))
+                  ra.sendEncrypted(ws, {
+                    type: "http_response",
+                    requestId: message.requestId,
+                    status: 500,
+                    statusText: "Internal Server Error",
+                    headers: {},
+                    body: "",
+                    error: error.message,
+                  } as TunnelHTTPResponse)
                 } catch (sendError) {
                   console.error("Failed to send error response:", sendError)
                 }
@@ -144,7 +162,7 @@ export class RA {
             } else if (message.type === "ws_connect") {
               ra.handleTunnelWebSocketConnect(
                 ws,
-                message as TunnelWSClientConnect
+                message as TunnelWSClientConnect,
               )
               return true
             } else if (message.type === "ws_message") {
@@ -173,7 +191,7 @@ export class RA {
   // Handle tunnel requests by synthesizing `fetch` events and passing to Express
   async handleTunnelHttpRequest(
     ws: WebSocket,
-    tunnelReq: TunnelHTTPRequest
+    tunnelReq: TunnelHTTPRequest,
   ): Promise<void> {
     try {
       // Parse URL to extract pathname and query
@@ -212,7 +230,11 @@ export class RA {
           body: res._getData(),
         }
 
-        ws.send(JSON.stringify(response))
+        try {
+          this.sendEncrypted(ws, response)
+        } catch (e) {
+          console.error("Failed to send encrypted http_response:", e)
+        }
       })
 
       // Handle errors generically. TODO: better error handling.
@@ -227,7 +249,11 @@ export class RA {
           error: error.message,
         }
 
-        ws.send(JSON.stringify(errorResponse))
+        try {
+          this.sendEncrypted(ws, errorResponse)
+        } catch (e) {
+          console.error("Failed to send encrypted error http_response:", e)
+        }
       })
 
       // Execute the request against the Express app
@@ -243,13 +269,17 @@ export class RA {
         error: error instanceof Error ? error.message : "Unknown error",
       }
 
-      ws.send(JSON.stringify(errorResponse))
+      try {
+        this.sendEncrypted(ws, errorResponse)
+      } catch (e) {
+        console.error("Failed to send encrypted catch http_response:", e)
+      }
     }
   }
 
   async handleTunnelWebSocketConnect(
     tunnelWs: WebSocket,
-    connectReq: TunnelWSClientConnect
+    connectReq: TunnelWSClientConnect,
   ): Promise<void> {
     try {
       console.log(`Creating WebSocket connection to ${connectReq.url}`)
@@ -266,7 +296,11 @@ export class RA {
           connectionId: connectReq.connectionId,
           eventType: "open",
         }
-        tunnelWs.send(JSON.stringify(event))
+        try {
+          this.sendEncrypted(tunnelWs, event)
+        } catch (e) {
+          console.error("Failed to send encrypted ws_event(open):", e)
+        }
       })
 
       ws.on("message", (data: Buffer) => {
@@ -289,7 +323,11 @@ export class RA {
           data: messageData,
           dataType: dataType,
         }
-        tunnelWs.send(JSON.stringify(message))
+        try {
+          this.sendEncrypted(tunnelWs, message)
+        } catch (e) {
+          console.error("Failed to send encrypted ws_message:", e)
+        }
       })
 
       ws.on("close", (code: number, reason: Buffer) => {
@@ -301,14 +339,18 @@ export class RA {
           code,
           reason: reason.toString(),
         }
-        tunnelWs.send(JSON.stringify(event))
+        try {
+          this.sendEncrypted(tunnelWs, event)
+        } catch (e) {
+          console.error("Failed to send encrypted ws_event(close):", e)
+        }
         this.webSocketConnections.delete(connectReq.connectionId)
       })
 
       ws.on("error", (error: Error) => {
         console.log(
           `WebSocket ${connectReq.connectionId} error:`,
-          error.message
+          error.message,
         )
         const event: TunnelWSServerEvent = {
           type: "ws_event",
@@ -316,7 +358,11 @@ export class RA {
           eventType: "error",
           error: error.message,
         }
-        tunnelWs.send(JSON.stringify(event))
+        try {
+          this.sendEncrypted(tunnelWs, event)
+        } catch (e) {
+          console.error("Failed to send encrypted ws_event(error):", e)
+        }
       })
     } catch (error) {
       console.error("Error creating WebSocket connection:", error)
@@ -326,7 +372,11 @@ export class RA {
         eventType: "error",
         error: error instanceof Error ? error.message : "Connection failed",
       }
-      tunnelWs.send(JSON.stringify(event))
+      try {
+        this.sendEncrypted(tunnelWs, event)
+      } catch (e) {
+        console.error("Failed to send encrypted ws_event(error catch):", e)
+      }
     }
   }
 
@@ -345,7 +395,7 @@ export class RA {
       } catch (error) {
         console.error(
           `Error sending message to WebSocket ${messageReq.connectionId}:`,
-          error
+          error,
         )
       }
     }
@@ -359,7 +409,7 @@ export class RA {
       } catch (error) {
         console.error(
           `Error closing WebSocket ${closeReq.connectionId}:`,
-          error
+          error,
         )
       }
       this.webSocketConnections.delete(closeReq.connectionId)
@@ -376,5 +426,46 @@ export class RA {
       }
     }
     return true
+  }
+
+  private encryptForSocket(ws: WebSocket, payload: unknown): TunnelEncrypted {
+    const key = this.symmetricKeyBySocket.get(ws)
+    if (!key) {
+      throw new Error("Missing symmetric key for socket")
+    }
+    const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES)
+    const plaintext = sodium.from_string(JSON.stringify(payload))
+    const ciphertext = sodium.crypto_secretbox_easy(plaintext, nonce, key)
+    return {
+      type: "enc",
+      nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
+      ciphertext: sodium.to_base64(ciphertext, sodium.base64_variants.ORIGINAL),
+    }
+  }
+
+  private decryptEnvelopeForSocket(
+    ws: WebSocket,
+    envelope: TunnelEncrypted,
+  ): any {
+    const key = this.symmetricKeyBySocket.get(ws)
+    if (!key) {
+      throw new Error("Missing symmetric key for socket")
+    }
+    const nonce = sodium.from_base64(
+      envelope.nonce,
+      sodium.base64_variants.ORIGINAL,
+    )
+    const ciphertext = sodium.from_base64(
+      envelope.ciphertext,
+      sodium.base64_variants.ORIGINAL,
+    )
+    const plaintext = sodium.crypto_secretbox_open_easy(ciphertext, nonce, key)
+    const text = sodium.to_string(plaintext)
+    return JSON.parse(text)
+  }
+
+  private sendEncrypted(ws: WebSocket, payload: unknown): void {
+    const env = this.encryptForSocket(ws, payload)
+    ws.send(JSON.stringify(env))
   }
 }

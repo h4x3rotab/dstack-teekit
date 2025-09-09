@@ -5,6 +5,7 @@ import {
   TunnelWSMessage,
   TunnelServerKX,
   TunnelClientKX,
+  TunnelEncrypted,
 } from "./types.js"
 import { generateRequestId } from "./utils/client.js"
 import { TunnelWebSocket } from "./TunnelWebSocket.js"
@@ -76,7 +77,7 @@ export class RA {
               const serverKx = message as TunnelServerKX
               const serverPub = sodium.from_base64(
                 serverKx.x25519PublicKey,
-                sodium.base64_variants.ORIGINAL
+                sodium.base64_variants.ORIGINAL,
               )
 
               const symmetricKey = sodium.crypto_secretbox_keygen()
@@ -89,7 +90,7 @@ export class RA {
                 type: "client_kx",
                 sealedSymmetricKey: sodium.to_base64(
                   sealed,
-                  sodium.base64_variants.ORIGINAL
+                  sodium.base64_variants.ORIGINAL,
                 ),
               }
               this.send(reply)
@@ -101,15 +102,22 @@ export class RA {
               reject(
                 e instanceof Error
                   ? e
-                  : new Error("Failed to process server_kx message")
+                  : new Error("Failed to process server_kx message"),
               )
             }
-          } else if (message.type === "http_response") {
-            this.handleTunnelResponse(message as TunnelHTTPResponse)
-          } else if (message.type === "ws_event") {
-            this.handleWebSocketTunnelEvent(message as TunnelWSServerEvent)
-          } else if (message.type === "ws_message") {
-            this.handleWebSocketTunnelMessage(message as TunnelWSMessage)
+          } else if (message.type === "enc") {
+            // Decrypt and dispatch
+            if (!this.symmetricKey) {
+              throw new Error("Missing symmetric key for encrypted message")
+            }
+            const decrypted = this.decryptEnvelope(message as TunnelEncrypted)
+            if (decrypted.type === "http_response") {
+              this.handleTunnelResponse(decrypted as TunnelHTTPResponse)
+            } else if (decrypted.type === "ws_event") {
+              this.handleWebSocketTunnelEvent(decrypted as TunnelWSServerEvent)
+            } else if (decrypted.type === "ws_message") {
+              this.handleWebSocketTunnelMessage(decrypted as TunnelWSMessage)
+            }
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error)
@@ -124,14 +132,63 @@ export class RA {
    * Low-level interfaces to the encrypted WebSocket.
    */
 
-  public send(message: unknown): void {
+  public send(message: any): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const data =
-        typeof message === "string" ? message : JSON.stringify(message)
-      this.ws.send(data)
+      // Allow plaintext only for client_kx during handshake
+      if (typeof message === "object" && message?.type === "client_kx") {
+        const data = JSON.stringify(message)
+        this.ws.send(data)
+        return
+      }
+
+      if (!this.symmetricKey) {
+        throw new Error("Encryption not ready: missing symmetric key")
+      }
+
+      const envelope = this.encryptPayload(message)
+      this.ws.send(JSON.stringify(envelope))
     } else {
       throw new Error("WebSocket not connected")
     }
+  }
+
+  private encryptPayload(payload: unknown): TunnelEncrypted {
+    if (!this.symmetricKey) {
+      throw new Error("Missing symmetric key")
+    }
+    const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES)
+    const plaintext = sodium.from_string(JSON.stringify(payload))
+    const ciphertext = sodium.crypto_secretbox_easy(
+      plaintext,
+      nonce,
+      this.symmetricKey,
+    )
+    return {
+      type: "enc",
+      nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
+      ciphertext: sodium.to_base64(ciphertext, sodium.base64_variants.ORIGINAL),
+    }
+  }
+
+  private decryptEnvelope(envelope: TunnelEncrypted): any {
+    if (!this.symmetricKey) {
+      throw new Error("Missing symmetric key")
+    }
+    const nonce = sodium.from_base64(
+      envelope.nonce,
+      sodium.base64_variants.ORIGINAL,
+    )
+    const ciphertext = sodium.from_base64(
+      envelope.ciphertext,
+      sodium.base64_variants.ORIGINAL,
+    )
+    const plaintext = sodium.crypto_secretbox_open_easy(
+      ciphertext,
+      nonce,
+      this.symmetricKey,
+    )
+    const text = sodium.to_string(plaintext)
+    return JSON.parse(text)
   }
 
   private handleTunnelResponse(response: TunnelHTTPResponse): void {
@@ -196,7 +253,7 @@ export class RA {
   get fetch() {
     return async (
       input: RequestInfo | URL,
-      init?: RequestInit
+      init?: RequestInit,
     ): Promise<Response> => {
       await this.ensureConnection()
 
@@ -204,8 +261,8 @@ export class RA {
         typeof input === "string"
           ? input
           : input instanceof URL
-          ? input.toString()
-          : input.url
+            ? input.toString()
+            : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 
@@ -251,7 +308,7 @@ export class RA {
           reject(
             error instanceof Error
               ? error
-              : new Error("WebSocket not connected")
+              : new Error("WebSocket not connected"),
           )
           return
         }
