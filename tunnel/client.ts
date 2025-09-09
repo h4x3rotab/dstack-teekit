@@ -8,8 +8,8 @@ import { generateRequestId } from "./utils/client.js"
 import { TunnelWebSocket } from "./TunnelWebSocket.js"
 
 export class RA {
-  origin: string
-  private ws: WebSocket | null = null
+  public ws: WebSocket | null = null
+
   private pendingRequests = new Map<
     string,
     { resolve: (response: Response) => void; reject: (error: Error) => void }
@@ -18,13 +18,13 @@ export class RA {
   private reconnectDelay = 1000
   private connectionPromise: Promise<void> | null = null
 
-  constructor(origin: string) {
+  constructor(private origin: string) {
     this.origin = origin
   }
 
   // Wait for a connection on `this.ws`, creating a new WebSocket to
   // replace this.ws if necessary.
-  private async ensureConnection(): Promise<void> {
+  public async ensureConnection(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return Promise.resolve()
     }
@@ -128,7 +128,7 @@ export class RA {
   get fetch() {
     return async (
       input: RequestInfo | URL,
-      init?: RequestInit,
+      init?: RequestInit
     ): Promise<Response> => {
       await this.ensureConnection()
 
@@ -136,8 +136,8 @@ export class RA {
         typeof input === "string"
           ? input
           : input instanceof URL
-            ? input.toString()
-            : input.url
+          ? input.toString()
+          : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 

@@ -5,6 +5,7 @@ import {
   TunnelWebSocketEvent,
 } from "./types.js"
 import { generateConnectionId } from "./utils/client.js"
+import { RA } from "./client.js"
 
 export class TunnelWebSocket extends EventTarget {
   public readonly CONNECTING = 0
@@ -25,10 +26,10 @@ export class TunnelWebSocket extends EventTarget {
   public onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null
   public onerror: ((this: WebSocket, ev: Event) => any) | null = null
 
-  private ra: any
+  private ra: RA
   private messageQueue: string[] = []
 
-  constructor(ra: any, url: string, protocols?: string | string[]) {
+  constructor(ra: RA, url: string, protocols?: string | string[]) {
     super()
     this.ra = ra
     this.url = url
@@ -65,7 +66,7 @@ export class TunnelWebSocket extends EventTarget {
       }
     } catch (error) {
       this.handleError(
-        error instanceof Error ? error.message : "Connection failed",
+        error instanceof Error ? error.message : "Connection failed"
       )
     }
   }
@@ -224,7 +225,7 @@ export class TunnelWebSocket extends EventTarget {
   }
 
   private toArrayBuffer(
-    data: ArrayBufferLike | Blob | ArrayBufferView,
+    data: ArrayBufferLike | Blob | ArrayBufferView
   ): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
       return data
@@ -234,7 +235,7 @@ export class TunnelWebSocket extends EventTarget {
       const input = new Uint8Array(
         data.buffer as ArrayBufferLike,
         data.byteOffset,
-        data.byteLength,
+        data.byteLength
       )
       out.set(input)
       return arrayBuffer

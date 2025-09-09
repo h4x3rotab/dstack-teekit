@@ -1,7 +1,7 @@
 import http from "http"
 import { WebSocketServer, WebSocket } from "ws"
 import { Express } from "express"
-import httpMocks from "node-mocks-http"
+import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
 import {
   TunnelRequest,
@@ -16,13 +16,13 @@ import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server"
 export class RA {
   public server: http.Server
   public wss: WebSocketServer
-  private app: Express
+
   private webSocketConnections = new Map<
     string,
     { ws: WebSocket; tunnelWs: WebSocket }
   >()
 
-  constructor(app: Express) {
+  constructor(private app: Express) {
     this.app = app
     this.server = http.createServer(app)
     this.wss = new WebSocketServer({ server: this.server })
@@ -47,7 +47,7 @@ export class RA {
               console.log(
                 "Tunnel request received:",
                 message.requestId,
-                message.url,
+                message.url
               )
               ;(this as any).ra
                 .handleTunnelRequest(ws, message as TunnelRequest)
@@ -76,21 +76,21 @@ export class RA {
               console.log(
                 "WebSocket connect request:",
                 message.connectionId,
-                message.url,
+                message.url
               )
               ;(this as any).ra.handleWebSocketConnect(
                 ws,
-                message as TunnelWebSocketConnect,
+                message as TunnelWebSocketConnect
               )
               return true
             } else if (message.type === "ws_message") {
               ;(this as any).ra.handleWebSocketMessage(
-                message as TunnelWebSocketMessage,
+                message as TunnelWebSocketMessage
               )
               return true
             } else if (message.type === "ws_close") {
               ;(this as any).ra.handleWebSocketClose(
-                message as TunnelWebSocketClose,
+                message as TunnelWebSocketClose
               )
               return true
             }
@@ -110,7 +110,7 @@ export class RA {
   // them to express
   async handleTunnelRequest(
     ws: WebSocket,
-    tunnelReq: TunnelRequest,
+    tunnelReq: TunnelRequest
   ): Promise<void> {
     try {
       // Parse URL to extract pathname and query
@@ -121,7 +121,7 @@ export class RA {
       })
 
       const req = httpMocks.createRequest({
-        method: tunnelReq.method,
+        method: tunnelReq.method as RequestMethod,
         url: tunnelReq.url,
         path: urlObj.pathname,
         headers: tunnelReq.headers,
@@ -186,7 +186,7 @@ export class RA {
 
   async handleWebSocketConnect(
     tunnelWs: WebSocket,
-    connectReq: TunnelWebSocketConnect,
+    connectReq: TunnelWebSocketConnect
   ): Promise<void> {
     try {
       console.log(`Creating WebSocket connection to ${connectReq.url}`)
@@ -245,7 +245,7 @@ export class RA {
       ws.on("error", (error: Error) => {
         console.log(
           `WebSocket ${connectReq.connectionId} error:`,
-          error.message,
+          error.message
         )
         const event: TunnelWebSocketEvent = {
           type: "ws_event",
@@ -282,7 +282,7 @@ export class RA {
       } catch (error) {
         console.error(
           `Error sending message to WebSocket ${messageReq.connectionId}:`,
-          error,
+          error
         )
       }
     }
@@ -296,7 +296,7 @@ export class RA {
       } catch (error) {
         console.error(
           `Error closing WebSocket ${closeReq.connectionId}:`,
-          error,
+          error
         )
       }
       this.webSocketConnections.delete(closeReq.connectionId)
