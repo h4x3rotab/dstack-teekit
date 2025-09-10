@@ -314,12 +314,16 @@ export class RA {
         }
 
         // Time out fetch requests after 30 seconds.
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           if (this.pendingRequests.has(requestId)) {
             this.pendingRequests.delete(requestId)
             reject(new Error("Request timeout"))
           }
         }, 30000)
+
+        if (typeof timer.unref === "function") {
+          timer.unref()
+        }
       })
     }
   }

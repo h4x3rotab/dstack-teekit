@@ -227,7 +227,10 @@ test.serial(
       t.is(resp.statusText, "OK")
       t.is(resp.body, "world")
     } finally {
-      await new Promise<void>((resolve) => ws.close() || resolve())
+      await new Promise<void>((resolve) => {
+        ws.close()
+        resolve()
+      })
       await new Promise<void>((resolve) =>
         tunnelServer.wss.close(() => resolve()),
       )
