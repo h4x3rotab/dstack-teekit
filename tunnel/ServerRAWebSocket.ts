@@ -1,0 +1,82 @@
+import { EventEmitter } from "events"
+
+// Mock WebSocket exposed to applications
+export class ServerRAMockWebSocket extends EventEmitter {
+  public readonly CONNECTING = 0
+  public readonly OPEN = 1
+  public readonly CLOSING = 2
+  public readonly CLOSED = 3
+
+  public readyState = this.OPEN
+
+  private onSendToClient: (data: string | Buffer) => void
+  private onCloseToClient: (code?: number, reason?: string) => void
+
+  constructor(
+    onSendToClient: (data: string | Buffer) => void,
+    onCloseToClient: (code?: number, reason?: string) => void,
+  ) {
+    super()
+    this.onSendToClient = onSendToClient
+    this.onCloseToClient = onCloseToClient
+  }
+
+  send(data: string | Buffer): void {
+    if (this.readyState !== this.OPEN) return
+    this.onSendToClient(data)
+  }
+
+  close(code?: number, reason?: string): void {
+    if (this.readyState === this.CLOSING || this.readyState === this.CLOSED) {
+      return
+    }
+    this.readyState = this.CLOSING
+    // Inform client then mark closed locally
+    this.onCloseToClient(code, reason)
+    this.emitClose(code, reason)
+  }
+
+  // Methods used by RA to inject events from client
+  emitMessage(data: string | Buffer): void {
+    if (this.readyState !== this.OPEN) return
+    const payload = typeof data === "string" ? data : Buffer.from(data)
+    this.emit("message", payload as any)
+  }
+
+  emitClose(code?: number, reason?: string): void {
+    if (this.readyState === this.CLOSED) return
+    this.readyState = this.CLOSED
+    this.emit("close", code ?? 1000, reason ?? "")
+  }
+
+  public emit(eventName: string | symbol, ...args: any[]): boolean {
+    return super.emit(eventName as any, ...args)
+  }
+}
+
+// Mock WebSocketServer exposed to application code
+export class ServerRAMockWebSocketServer extends EventEmitter {
+  public clients: Set<ServerRAMockWebSocket> = new Set()
+
+  addClient(ws: ServerRAMockWebSocket): void {
+    this.clients.add(ws)
+    this.emit("connection", ws)
+  }
+
+  deleteClient(ws: ServerRAMockWebSocket): void {
+    this.clients.delete(ws)
+  }
+
+  close(cb?: () => void): void {
+    try {
+      for (const ws of Array.from(this.clients)) {
+        try {
+          ws.close(1000, "server closing")
+        } catch {}
+      }
+      this.clients.clear()
+    } finally {
+      if (cb) cb()
+    }
+  }
+}

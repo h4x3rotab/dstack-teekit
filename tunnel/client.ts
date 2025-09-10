@@ -8,7 +8,7 @@ import {
   TunnelEncrypted,
 } from "./types.js"
 import { generateRequestId } from "./utils/client.js"
-import { TunnelWebSocket } from "./TunnelWebSocket.js"
+import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 import sodium from "libsodium-wrappers"
 
 export class RA {
@@ -21,7 +21,7 @@ export class RA {
     string,
     { resolve: (response: Response) => void; reject: (error: Error) => void }
   >()
-  private webSocketConnections = new Map<string, TunnelWebSocket>()
+  private webSocketConnections = new Map<string, ClientRAMockWebSocket>()
   private reconnectDelay = 1000
   private connectionPromise: Promise<void> | null = null
 
@@ -49,8 +49,11 @@ export class RA {
     }
 
     this.connectionPromise = new Promise((resolve, reject) => {
-      const wsUrl = this.origin.replace(/^http/, "ws")
-      this.ws = new WebSocket(wsUrl)
+      const controlUrl = new URL(this.origin)
+      controlUrl.protocol = controlUrl.protocol.replace(/^http/, "ws")
+      // Use dedicated control channel path
+      controlUrl.pathname = "/__ra__"
+      this.ws = new WebSocket(controlUrl.toString())
 
       this.ws.onopen = () => {
         // Wait for server_kx to complete handshake before resolving
@@ -152,6 +155,12 @@ export class RA {
     }
   }
 
+  public getOriginPort(): number {
+    const u = new URL(this.origin)
+    if (u.port) return Number(u.port)
+    return u.protocol === "https:" ? 443 : 80
+  }
+
   private encryptPayload(payload: unknown): TunnelEncrypted {
     if (!this.symmetricKey) {
       throw new Error("Missing symmetric key")
@@ -229,7 +238,7 @@ export class RA {
    * Register and unregister WebSocket mocks.
    */
 
-  public registerWebSocketTunnel(connection: TunnelWebSocket): void {
+  public registerWebSocketTunnel(connection: ClientRAMockWebSocket): void {
     this.webSocketConnections.set(connection.connectionId, connection)
   }
 
@@ -243,7 +252,7 @@ export class RA {
 
   get WebSocket() {
     const self = this
-    return class extends TunnelWebSocket {
+    return class extends ClientRAMockWebSocket {
       constructor(url: string, protocols?: string | string[]) {
         super(self, url, protocols)
       }
@@ -261,8 +270,8 @@ export class RA {
         typeof input === "string"
           ? input
           : input instanceof URL
-            ? input.toString()
-            : input.url
+          ? input.toString()
+          : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 
