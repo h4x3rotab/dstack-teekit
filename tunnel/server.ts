@@ -23,6 +23,7 @@ export class RA {
   public server: http.Server
   public wss: any
   private controlWss: WebSocketServer
+
   public x25519PublicKey: Uint8Array
   private x25519PrivateKey: Uint8Array
 
@@ -41,27 +42,22 @@ export class RA {
     this.x25519PublicKey = publicKey
     this.x25519PrivateKey = privateKey
     this.server = http.createServer(app)
+
     // Expose a mock WebSocketServer to application code
     this.wss = new ServerRAMockWebSocketServer()
-    // Control channel WebSocketServer used internally by the tunnel
+
+    // Route upgrades to the control channel WebSocketServer
     this.controlWss = new WebSocketServer({ noServer: true })
-
-    this.setupWebSocketHandler()
-
-    // Route upgrades to the appropriate WebSocketServer
+    this.setupControlChannel()
     this.server.on("upgrade", (req, socket, head) => {
       const url = req.url || ""
       if (url.startsWith("/__ra__")) {
-        this.controlWss.handleUpgrade(
-          req as any,
-          socket as any,
-          head as any,
-          (ws) => {
-            this.controlWss.emit("connection", ws, req)
-          },
-        )
+        this.controlWss.handleUpgrade(req, socket, head, (ws) => {
+          this.controlWss.emit("connection", ws, req)
+        })
       } else {
-        // Application WebSockets are handled via the mock server; no upgrade here
+        // Don't allow other WebSocket servers to bind to the server;
+        // all WebSocket connections go to the encrypted channel.
         socket.destroy()
       }
     })
@@ -76,10 +72,11 @@ export class RA {
   /**
    * Intercept incoming WebSocket messages on `this.wss`.
    */
-  private setupWebSocketHandler(): void {
+  private setupControlChannel(): void {
+    const ra = this
     // Only intercept control connections on the private path
     this.controlWss.on("connection", (ws: WebSocket) => {
-      console.log("Setting up tunnel handler")
+      console.log("New WebSocket connection, setting up control channel")
 
       // Intercept messages before they reach application handlers
       const originalEmit = ws.emit.bind(ws)
@@ -98,6 +95,31 @@ export class RA {
       // Cleanup on close
       ws.on("close", () => {
         this.symmetricKeyBySocket.delete(ws)
+        try {
+          const toRemove: string[] = []
+          for (const [
+            connectionId,
+            conn,
+          ] of this.webSocketConnections.entries()) {
+            if (conn.tunnelWs === ws) {
+              try {
+                conn.mockWs.emitClose(1006, "tunnel closed")
+              } catch {}
+              try {
+                this.wss.deleteClient(conn.mockWs)
+              } catch {}
+              try {
+                this.symmetricKeyBySocket.delete(conn.tunnelWs)
+              } catch {}
+              toRemove.push(connectionId)
+            }
+          }
+          for (const id of toRemove) {
+            this.webSocketConnections.delete(id)
+          }
+        } catch (e) {
+          console.error("Failed to cleanup connections on tunnel close:", e)
+        }
       })
 
       ws.emit = function (event: string, ...args: any[]): boolean {
@@ -159,16 +181,15 @@ export class RA {
             }
 
             if (message.type === "http_request") {
+              ra.logWebSocketConnections()
               console.log(
-                "Tunnel request received:",
-                message.requestId,
-                message.url,
+                `Encrypted HTTP request (${message.requestId}): ${message.url}`,
               )
               ra.handleTunnelHttpRequest(
                 ws,
                 message as TunnelHTTPRequest,
               ).catch((error: Error) => {
-                console.error("Error handling tunnel request:", error)
+                console.error("Error handling encrypted request:", error)
 
                 // Send 500 error response back to client
                 try {
@@ -215,6 +236,7 @@ export class RA {
       ;(ws as any).ra = this
     })
   }
+
   // Handle tunnel requests by synthesizing `fetch` events and passing to Express
   async handleTunnelHttpRequest(
     ws: WebSocket,
@@ -312,9 +334,7 @@ export class RA {
       // Validate that the requested URL targets this server's port
       const address = this.server.address()
       const serverPort =
-        typeof address === "object" && address
-          ? (address as any).port
-          : undefined
+        typeof address === "object" && address ? address.port : undefined
       const targetUrl = new URL(connectReq.url)
       const targetPort = targetUrl.port
         ? Number(targetUrl.port)
@@ -478,7 +498,8 @@ export class RA {
   private encryptForSocket(ws: WebSocket, payload: unknown): TunnelEncrypted {
     const key = this.symmetricKeyBySocket.get(ws)
     if (!key) {
-      throw new Error("Missing symmetric key for socket")
+      this.logWebSocketConnections()
+      throw new Error("Missing symmetric key for socket (outbound)")
     }
     const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES)
     const plaintext = sodium.from_string(JSON.stringify(payload))
@@ -493,10 +514,11 @@ export class RA {
   private decryptEnvelopeForSocket(
     ws: WebSocket,
     envelope: TunnelEncrypted,
-  ): any {
+  ): unknown {
     const key = this.symmetricKeyBySocket.get(ws)
     if (!key) {
-      throw new Error("Missing symmetric key for socket")
+      this.logWebSocketConnections()
+      throw new Error("Missing symmetric key for socket (inbound)")
     }
     const nonce = sodium.from_base64(
       envelope.nonce,
@@ -514,5 +536,52 @@ export class RA {
   private sendEncrypted(ws: WebSocket, payload: unknown): void {
     const env = this.encryptForSocket(ws, payload)
     ws.send(JSON.stringify(env))
+  }
+
+  /**
+   * Helper to log current WebSocket connections and whether they have
+   * established symmetric keys.
+   */
+  public logWebSocketConnections(): void {
+    try {
+      const entries = Array.from(this.webSocketConnections.entries())
+      console.log(`WebSocket connections: ${entries.length}`)
+      for (const [connectionId, { tunnelWs }] of entries) {
+        const hasKey = this.symmetricKeyBySocket.has(tunnelWs)
+        let state
+        switch (tunnelWs.readyState) {
+          case 0:
+            state = "CONNECTING"
+            break
+          case 1:
+            state = "OPEN"
+            break
+          case 2:
+            state = "CLOSING"
+            break
+          case 3:
+            state = "CLOSED"
+            break
+        }
+        console.log(
+          `- ${connectionId}: state=${state}, symmetricKey=${
+            hasKey ? "set" : "missing"
+          }`,
+        )
+      }
+
+      // Also warn if there are symmetric keys not tied to tracked connections
+      const trackedSockets = new Set(entries.map(([, v]) => v.tunnelWs))
+      const strayKeys = Array.from(this.symmetricKeyBySocket.keys()).filter(
+        (ws) => !trackedSockets.has(ws),
+      )
+      if (strayKeys.length > 0) {
+        console.warn(
+          `Warning: ${strayKeys.length} symmetric key(s) not associated with a tracked connection`,
+        )
+      }
+    } catch (e) {
+      console.error("Failed to log WebSocket connections:", e)
+    }
   }
 }
