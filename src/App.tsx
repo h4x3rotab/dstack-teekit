@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react"
+import { useState, useEffect, useRef, FormEvent, ChangeEvent, useCallback } from "react"
 import "./App.css"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
@@ -24,22 +24,32 @@ function App() {
 
   useEffect(scrollToBottom, [messages])
 
-  useEffect(() => {
-    const fetchUptime = async () => {
-      try {
-        const response = await ra.fetch("http://localhost:3001/uptime")
-        const data: UptimeData = await response.json()
-        setUptime(data.uptime.formatted)
-      } catch (error) {
-        console.error("Failed to fetch uptime:", error)
-      }
+  const fetchUptime = useCallback(async () => {
+    try {
+      const response = await ra.fetch("http://localhost:3001/uptime")
+      const data: UptimeData = await response.json()
+      setUptime(data.uptime.formatted)
+    } catch (error) {
+      console.error("Failed to fetch uptime:", error)
     }
+  }, [])
 
+  const disconnectRA = useCallback(() => {
+    try {
+      if (ra.ws) {
+        ra.ws.close(4000, "simulate disconnect")
+      }
+    } catch (e) {
+      console.error("Failed to close RA WebSocket:", e)
+    }
+  }, [])
+
+  useEffect(() => {
     fetchUptime()
     const interval = setInterval(fetchUptime, 10000) // Update every 10 seconds
 
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchUptime])
 
   useEffect(() => {
     if (
@@ -132,12 +142,35 @@ function App() {
           >
             {connected ? "🟢 Connected" : "🔴 Disconnected"}
           </span>
+          {" "}
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault()
+              disconnectRA()
+            }}
+            style={{ color: "#333", textDecoration: "underline", cursor: "pointer", fontSize: "0.85em" }}
+          >
+            Disconnect
+          </a>
         </div>
       </div>
 
       <div className="messages-container">
         {uptime && (
-          <div className="uptime-display">Server uptime: {uptime}</div>
+          <div className="uptime-display">
+            Server uptime: {uptime}{" "}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault()
+                fetchUptime()
+              }}
+              style={{ color: "inherit", textDecoration: "underline", cursor: "pointer" }}
+            >
+              Refresh
+            </a>
+          </div>
         )}
         {hiddenMessagesCount > 0 && (
           <div className="hidden-messages-display">

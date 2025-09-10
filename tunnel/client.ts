@@ -61,6 +61,38 @@ export class RA {
 
       this.ws.onclose = () => {
         this.connectionPromise = null
+        // Propagate disconnect to all tunneled WebSockets
+        try {
+          for (const [
+            connectionId,
+            connection,
+          ] of this.webSocketConnections.entries()) {
+            connection.handleTunnelEvent({
+              type: "ws_event",
+              connectionId,
+              eventType: "close",
+              code: 1006,
+              reason: "tunnel closed",
+            } as TunnelWSServerEvent)
+          }
+          this.webSocketConnections.clear()
+        } catch (e) {
+          console.error(
+            "Failed to propagate tunnel close to WS connections:",
+            e,
+          )
+        }
+
+        // Fail any pending fetch requests
+        try {
+          for (const [, pending] of this.pendingRequests.entries()) {
+            pending.reject(new Error("Tunnel disconnected"))
+          }
+          this.pendingRequests.clear()
+        } catch {}
+
+        // Drop symmetric key; a new handshake will set it on reconnect
+        this.symmetricKey = undefined
         setTimeout(() => {
           this.ensureConnection()
         }, this.reconnectDelay)
@@ -69,6 +101,31 @@ export class RA {
       this.ws.onerror = (error) => {
         this.connectionPromise = null
         console.error(error)
+
+        // Inform all tunneled WebSockets about the error
+        try {
+          for (const [
+            connectionId,
+            connection,
+          ] of this.webSocketConnections.entries()) {
+            connection.handleTunnelEvent({
+              type: "ws_event",
+              connectionId,
+              eventType: "error",
+              error: (error as any)?.message || "Tunnel error",
+            } as TunnelWSServerEvent)
+          }
+        } catch {}
+
+        // If not open, attempt reconnect soon; close handler will also handle it
+        try {
+          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            setTimeout(() => {
+              this.ensureConnection()
+            }, this.reconnectDelay)
+          }
+        } catch {}
+
         reject(new Error("WebSocket connection failed"))
       }
 
