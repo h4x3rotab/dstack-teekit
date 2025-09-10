@@ -42,6 +42,14 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.CONNECTING ||
+        wsRef.current.readyState === WebSocket.OPEN)
+    ) {
+      return
+    }
+
     const ws = new ra.WebSocket("ws://localhost:3001")
     wsRef.current = ws
 
@@ -75,7 +83,11 @@ function App() {
     }
 
     return () => {
-      ws.close()
+      try {
+        ws.close()
+      } finally {
+        if (wsRef.current === ws) wsRef.current = null
+      }
     }
   }, [])
 
