@@ -1,11 +1,11 @@
 import {
-  TunnelHTTPRequest,
-  TunnelHTTPResponse,
-  TunnelWSServerEvent,
-  TunnelWSMessage,
-  TunnelServerKX,
-  TunnelClientKX,
-  TunnelEncrypted,
+  RAEncryptedHTTPRequest,
+  RAEncryptedHTTPResponse,
+  RAEncryptedServerEvent,
+  RAEncryptedWSMessage,
+  ControlChannelKXAnnounce,
+  ControlChannelKXConfirm,
+  ControlChannelEncryptedMessage,
 } from "./types.js"
 import { generateRequestId } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
@@ -73,7 +73,7 @@ export class RA {
               eventType: "close",
               code: 1006,
               reason: "tunnel closed",
-            } as TunnelWSServerEvent)
+            } as RAEncryptedServerEvent)
           }
           this.webSocketConnections.clear()
         } catch (e) {
@@ -113,7 +113,7 @@ export class RA {
               connectionId,
               eventType: "error",
               error: (error as any)?.message || "Tunnel error",
-            } as TunnelWSServerEvent)
+            } as RAEncryptedServerEvent)
           }
         } catch {}
 
@@ -134,7 +134,7 @@ export class RA {
           const message = JSON.parse(event.data)
           if (message.type === "server_kx") {
             try {
-              const serverKx = message as TunnelServerKX
+              const serverKx = message as ControlChannelKXAnnounce
               const serverPub = sodium.from_base64(
                 serverKx.x25519PublicKey,
                 sodium.base64_variants.ORIGINAL,
@@ -146,7 +146,7 @@ export class RA {
               this.serverX25519PublicKey = serverPub
               this.symmetricKey = symmetricKey
 
-              const reply: TunnelClientKX = {
+              const reply: ControlChannelKXConfirm = {
                 type: "client_kx",
                 sealedSymmetricKey: sodium.to_base64(
                   sealed,
@@ -170,13 +170,19 @@ export class RA {
             if (!this.symmetricKey) {
               throw new Error("Missing symmetric key for encrypted message")
             }
-            const decrypted = this.decryptEnvelope(message as TunnelEncrypted)
+            const decrypted = this.#decryptEnvelope(
+              message as ControlChannelEncryptedMessage,
+            )
             if (decrypted.type === "http_response") {
-              this.handleTunnelResponse(decrypted as TunnelHTTPResponse)
+              this.#handleTunnelResponse(decrypted as RAEncryptedHTTPResponse)
             } else if (decrypted.type === "ws_event") {
-              this.handleWebSocketTunnelEvent(decrypted as TunnelWSServerEvent)
+              this.#handleWebSocketTunnelEvent(
+                decrypted as RAEncryptedServerEvent,
+              )
             } else if (decrypted.type === "ws_message") {
-              this.handleWebSocketTunnelMessage(decrypted as TunnelWSMessage)
+              this.#handleWebSocketTunnelMessage(
+                decrypted as RAEncryptedWSMessage,
+              )
             }
           }
         } catch (error) {
@@ -205,7 +211,7 @@ export class RA {
         throw new Error("Encryption not ready: missing symmetric key")
       }
 
-      const envelope = this.encryptPayload(message)
+      const envelope = this.#encryptPayload(message)
       this.ws.send(JSON.stringify(envelope))
     } else {
       throw new Error("WebSocket not connected")
@@ -218,7 +224,7 @@ export class RA {
     return u.protocol === "https:" ? 443 : 80
   }
 
-  private encryptPayload(payload: unknown): TunnelEncrypted {
+  #encryptPayload(payload: unknown): ControlChannelEncryptedMessage {
     if (!this.symmetricKey) {
       throw new Error("Missing symmetric key")
     }
@@ -236,7 +242,7 @@ export class RA {
     }
   }
 
-  private decryptEnvelope(envelope: TunnelEncrypted): any {
+  #decryptEnvelope(envelope: ControlChannelEncryptedMessage): any {
     if (!this.symmetricKey) {
       throw new Error("Missing symmetric key")
     }
@@ -257,7 +263,7 @@ export class RA {
     return JSON.parse(text)
   }
 
-  private handleTunnelResponse(response: TunnelHTTPResponse): void {
+  #handleTunnelResponse(response: RAEncryptedHTTPResponse): void {
     const pending = this.pendingRequests.get(response.requestId)
     if (!pending) return
 
@@ -277,14 +283,14 @@ export class RA {
     pending.resolve(syntheticResponse)
   }
 
-  private handleWebSocketTunnelEvent(event: TunnelWSServerEvent): void {
+  #handleWebSocketTunnelEvent(event: RAEncryptedServerEvent): void {
     const connection = this.webSocketConnections.get(event.connectionId)
     if (connection) {
       connection.handleTunnelEvent(event)
     }
   }
 
-  private handleWebSocketTunnelMessage(message: TunnelWSMessage): void {
+  #handleWebSocketTunnelMessage(message: RAEncryptedWSMessage): void {
     const connection = this.webSocketConnections.get(message.connectionId)
     if (connection) {
       connection.handleTunnelMessage(message)
@@ -356,7 +362,7 @@ export class RA {
       }
 
       const requestId = generateRequestId()
-      const tunnelRequest: TunnelHTTPRequest = {
+      const tunnelRequest: RAEncryptedHTTPRequest = {
         type: "http_request",
         requestId,
         method,

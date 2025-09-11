@@ -1,8 +1,8 @@
 import {
-  TunnelWSClientConnect,
-  TunnelWSMessage,
-  TunnelWSClientClose,
-  TunnelWSServerEvent,
+  RAEncryptedClientConnectEvent,
+  RAEncryptedWSMessage,
+  RAEncryptedClientCloseEvent,
+  RAEncryptedServerEvent,
 } from "./types.js"
 import { generateConnectionId } from "./utils/client.js"
 import { RA } from "./client.js"
@@ -66,7 +66,7 @@ export class ClientRAMockWebSocket extends EventTarget {
           : [protocols]
         : undefined
 
-      const connectMessage: TunnelWSClientConnect = {
+      const connectMessage: RAEncryptedClientConnectEvent = {
         type: "ws_connect",
         connectionId: this.connectionId,
         url: this.url,
@@ -116,7 +116,7 @@ export class ClientRAMockWebSocket extends EventTarget {
       dataType = "arraybuffer"
     }
 
-    const message: TunnelWSMessage = {
+    const message: RAEncryptedWSMessage = {
       type: "ws_message",
       connectionId: this.connectionId,
       data: messageData,
@@ -142,7 +142,7 @@ export class ClientRAMockWebSocket extends EventTarget {
 
     this.readyState = this.CLOSING
 
-    const closeMessage: TunnelWSClientClose = {
+    const closeMessage: RAEncryptedClientCloseEvent = {
       type: "ws_close",
       connectionId: this.connectionId,
       code,
@@ -162,7 +162,7 @@ export class ClientRAMockWebSocket extends EventTarget {
   }
 
   // Handle events from the tunnel
-  public handleTunnelEvent(event: TunnelWSServerEvent): void {
+  public handleTunnelEvent(event: RAEncryptedServerEvent): void {
     switch (event.eventType) {
       case "open":
         this.readyState = this.OPEN
@@ -208,7 +208,7 @@ export class ClientRAMockWebSocket extends EventTarget {
     }
   }
 
-  public handleTunnelMessage(message: TunnelWSMessage): void {
+  public handleTunnelMessage(message: RAEncryptedWSMessage): void {
     let messageData: any
     if (message.dataType === "arraybuffer") {
       messageData = this.base64ToArrayBuffer(message.data)

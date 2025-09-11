@@ -5,14 +5,15 @@ import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
 import sodium from "libsodium-wrappers"
 import {
-  TunnelHTTPRequest,
-  TunnelHTTPResponse,
-  TunnelWSClientConnect,
-  TunnelWSMessage,
-  TunnelWSClientClose,
-  TunnelWSServerEvent,
-  TunnelEncrypted,
+  RAEncryptedHTTPRequest,
+  RAEncryptedHTTPResponse,
+  RAEncryptedClientConnectEvent,
+  RAEncryptedWSMessage,
+  RAEncryptedClientCloseEvent,
+  RAEncryptedServerEvent,
+  ControlChannelEncryptedMessage,
 } from "./types.js"
+import { isTextData } from "./utils.js"
 import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server.js"
 import {
   ServerRAMockWebSocket,
@@ -48,7 +49,7 @@ export class RA {
 
     // Route upgrades to the control channel WebSocketServer
     this.controlWss = new WebSocketServer({ noServer: true })
-    this.setupControlChannel()
+    this.#setupControlChannel()
     this.server.on("upgrade", (req, socket, head) => {
       const url = req.url || ""
       if (url.startsWith("/__ra__")) {
@@ -72,7 +73,7 @@ export class RA {
   /**
    * Intercept incoming WebSocket messages on `this.wss`.
    */
-  private setupControlChannel(): void {
+  #setupControlChannel(): void {
     this.controlWss.on("connection", (controlWs: WebSocket) => {
       console.log("New WebSocket connection, setting up control channel")
 
@@ -168,9 +169,9 @@ export class RA {
             // Decrypt envelope messages post-handshake
             if (message.type === "enc") {
               try {
-                message = ra.decryptEnvelopeForSocket(
+                message = ra.#decryptEnvelopeForSocket(
                   controlWs,
-                  message as TunnelEncrypted,
+                  message as ControlChannelEncryptedMessage,
                 )
               } catch (e) {
                 console.error("Failed to decrypt envelope:", e)
@@ -183,9 +184,9 @@ export class RA {
               console.log(
                 `Encrypted HTTP request (${message.requestId}): ${message.url}`,
               )
-              ra.handleTunnelHttpRequest(
+              ra.#handleTunnelHttpRequest(
                 controlWs,
-                message as TunnelHTTPRequest,
+                message as RAEncryptedHTTPRequest,
               ).catch((error: Error) => {
                 console.error("Error handling encrypted request:", error)
 
@@ -199,23 +200,25 @@ export class RA {
                     headers: {},
                     body: "",
                     error: error.message,
-                  } as TunnelHTTPResponse)
+                  } as RAEncryptedHTTPResponse)
                 } catch (sendError) {
                   console.error("Failed to send error response:", sendError)
                 }
               })
               return true
             } else if (message.type === "ws_connect") {
-              ra.handleTunnelWebSocketConnect(
+              ra.#handleTunnelWebSocketConnect(
                 controlWs,
-                message as TunnelWSClientConnect,
+                message as RAEncryptedClientConnectEvent,
               )
               return true
             } else if (message.type === "ws_message") {
-              ra.handleTunnelWebSocketMessage(message as TunnelWSMessage)
+              ra.#handleTunnelWebSocketMessage(message as RAEncryptedWSMessage)
               return true
             } else if (message.type === "ws_close") {
-              ra.handleTunnelWebSocketClose(message as TunnelWSClientClose)
+              ra.#handleTunnelWebSocketClose(
+                message as RAEncryptedClientCloseEvent,
+              )
               return true
             }
           } catch (error) {
@@ -236,9 +239,9 @@ export class RA {
   }
 
   // Handle tunnel requests by synthesizing `fetch` events and passing to Express
-  async handleTunnelHttpRequest(
+  async #handleTunnelHttpRequest(
     controlWs: WebSocket,
-    tunnelReq: TunnelHTTPRequest,
+    tunnelReq: RAEncryptedHTTPRequest,
   ): Promise<void> {
     try {
       // Parse URL to extract pathname and query
@@ -268,7 +271,7 @@ export class RA {
       // get out of sync.
 
       res.on("end", () => {
-        const response: TunnelHTTPResponse = {
+        const response: RAEncryptedHTTPResponse = {
           type: "http_response",
           requestId: tunnelReq.requestId,
           status: res.statusCode,
@@ -286,7 +289,7 @@ export class RA {
 
       // Handle errors generically. TODO: better error handling.
       res.on("error", (error) => {
-        const errorResponse: TunnelHTTPResponse = {
+        const errorResponse: RAEncryptedHTTPResponse = {
           type: "http_response",
           requestId: tunnelReq.requestId,
           status: 500,
@@ -306,7 +309,7 @@ export class RA {
       // Execute the request against the Express app
       this.app(req, res)
     } catch (error) {
-      const errorResponse: TunnelHTTPResponse = {
+      const errorResponse: RAEncryptedHTTPResponse = {
         type: "http_response",
         requestId: tunnelReq.requestId,
         status: 500,
@@ -324,9 +327,9 @@ export class RA {
     }
   }
 
-  async handleTunnelWebSocketConnect(
+  async #handleTunnelWebSocketConnect(
     controlWs: WebSocket,
-    connectReq: TunnelWSClientConnect,
+    connectReq: RAEncryptedClientConnectEvent,
   ): Promise<void> {
     try {
       // Validate that the requested URL targets this server's port
@@ -343,7 +346,7 @@ export class RA {
       if (!serverPort || Number(serverPort) !== targetPort) {
         const errMsg = `WS connect port mismatch: server=${serverPort} target=${targetPort}`
         console.error(errMsg)
-        const event: TunnelWSServerEvent = {
+        const event: RAEncryptedServerEvent = {
           type: "ws_event",
           connectionId: connectReq.connectionId,
           eventType: "error",
@@ -365,7 +368,7 @@ export class RA {
             messageData = payload
             dataType = "string"
           } else if (Buffer.isBuffer(payload)) {
-            if (this.isTextData(payload)) {
+            if (isTextData(payload)) {
               messageData = payload.toString()
               dataType = "string"
             } else {
@@ -376,7 +379,7 @@ export class RA {
             messageData = String(payload)
             dataType = "string"
           }
-          const message: TunnelWSMessage = {
+          const message: RAEncryptedWSMessage = {
             type: "ws_message",
             connectionId: connectReq.connectionId,
             data: messageData,
@@ -390,7 +393,7 @@ export class RA {
         },
         // onClose: application -> client
         (code?: number, reason?: string) => {
-          const event: TunnelWSServerEvent = {
+          const event: RAEncryptedServerEvent = {
             type: "ws_event",
             connectionId: connectReq.connectionId,
             eventType: "close",
@@ -417,7 +420,7 @@ export class RA {
       } catch {}
 
       // Signal open to client
-      const openEvt: TunnelWSServerEvent = {
+      const openEvt: RAEncryptedServerEvent = {
         type: "ws_event",
         connectionId: connectReq.connectionId,
         eventType: "open",
@@ -429,7 +432,7 @@ export class RA {
       }
     } catch (error) {
       console.error("Error creating WebSocket connection:", error)
-      const event: TunnelWSServerEvent = {
+      const event: RAEncryptedServerEvent = {
         type: "ws_event",
         connectionId: connectReq.connectionId,
         eventType: "error",
@@ -443,7 +446,7 @@ export class RA {
     }
   }
 
-  handleTunnelWebSocketMessage(messageReq: TunnelWSMessage): void {
+  #handleTunnelWebSocketMessage(messageReq: RAEncryptedWSMessage): void {
     const connection = this.webSocketConnections.get(messageReq.connectionId)
     if (connection) {
       try {
@@ -463,7 +466,7 @@ export class RA {
     }
   }
 
-  handleTunnelWebSocketClose(closeReq: TunnelWSClientClose): void {
+  #handleTunnelWebSocketClose(closeReq: RAEncryptedClientCloseEvent): void {
     const connection = this.webSocketConnections.get(closeReq.connectionId)
     if (connection) {
       try {
@@ -481,22 +484,10 @@ export class RA {
     }
   }
 
-  private isTextData(data: Buffer): boolean {
-    // Simple heuristic to detect if data is likely text
-    // Check for null bytes and high-bit characters
-    for (let i = 0; i < Math.min(data.length, 1024); i++) {
-      const byte = data[i]
-      if (byte === 0 || (byte > 127 && byte < 160)) {
-        return false
-      }
-    }
-    return true
-  }
-
-  private encryptForSocket(
+  #encryptForSocket(
     controlWs: WebSocket,
     payload: unknown,
-  ): TunnelEncrypted {
+  ): ControlChannelEncryptedMessage {
     const key = this.symmetricKeyBySocket.get(controlWs)
     if (!key) {
       this.logWebSocketConnections()
@@ -512,9 +503,9 @@ export class RA {
     }
   }
 
-  private decryptEnvelopeForSocket(
+  #decryptEnvelopeForSocket(
     controlWs: WebSocket,
-    envelope: TunnelEncrypted,
+    envelope: ControlChannelEncryptedMessage,
   ): unknown {
     const key = this.symmetricKeyBySocket.get(controlWs)
     if (!key) {
@@ -535,7 +526,7 @@ export class RA {
   }
 
   private sendEncrypted(controlWs: WebSocket, payload: unknown): void {
-    const env = this.encryptForSocket(controlWs, payload)
+    const env = this.#encryptForSocket(controlWs, payload)
     controlWs.send(JSON.stringify(env))
   }
 

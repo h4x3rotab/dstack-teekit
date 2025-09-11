@@ -1,4 +1,4 @@
-export type TunnelHTTPRequest = {
+export type RAEncryptedHTTPRequest = {
   type: "http_request"
   requestId: string
   method: string
@@ -8,7 +8,7 @@ export type TunnelHTTPRequest = {
   timeout?: number
 }
 
-export type TunnelHTTPResponse = {
+export type RAEncryptedHTTPResponse = {
   type: "http_response"
   requestId: string
   status: number
@@ -18,28 +18,28 @@ export type TunnelHTTPResponse = {
   error?: string
 }
 
-export type TunnelWSClientConnect = {
+export type RAEncryptedClientConnectEvent = {
   type: "ws_connect"
   connectionId: string
   url: string
   protocols?: string[]
 }
 
-export type TunnelWSClientClose = {
+export type RAEncryptedClientCloseEvent = {
   type: "ws_close"
   connectionId: string
   code?: number
   reason?: string
 }
 
-export type TunnelWSMessage = {
+export type RAEncryptedWSMessage = {
   type: "ws_message"
   connectionId: string
   data: string
   dataType: "string" | "arraybuffer"
 }
 
-export type TunnelWSServerEvent = {
+export type RAEncryptedServerEvent = {
   type: "ws_event"
   connectionId: string
   eventType: "open" | "close" | "error"
@@ -50,13 +50,13 @@ export type TunnelWSServerEvent = {
 
 // Sent by the tunnel server to announce its key exchange public key.
 // The public key is X25519, base64-encoded.
-export type TunnelServerKX = {
+export type ControlChannelKXAnnounce = {
   type: "server_kx"
   x25519PublicKey: string
 }
 
 // Sent by the client to deliver a symmetric key sealed to the server pubkey.
-export type TunnelClientKX = {
+export type ControlChannelKXConfirm = {
   type: "client_kx"
   sealedSymmetricKey: string
 }
@@ -64,7 +64,7 @@ export type TunnelClientKX = {
 // Encrypted envelope carrying any tunneled payload after handshake.
 // The contents (ciphertext) are a JSON-encoded payload of the original
 // tunnel message types, encrypted with XSalsa20-Poly1305 via crypto_secretbox.
-export type TunnelEncrypted = {
+export type ControlChannelEncryptedMessage = {
   type: "enc"
   nonce: string // base64
   ciphertext: string // base64
