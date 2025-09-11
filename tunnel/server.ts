@@ -4,6 +4,7 @@ import { Express } from "express"
 import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
 import sodium from "libsodium-wrappers"
+
 import {
   RAEncryptedHTTPRequest,
   RAEncryptedHTTPResponse,
@@ -21,8 +22,12 @@ import {
   isRAEncryptedWSMessage,
   isRAEncryptedClientCloseEvent,
 } from "./typeguards.js"
-import { isTextData } from "./utils.js"
-import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server.js"
+import {
+  isTextData,
+  parseBody,
+  sanitizeHeaders,
+  getStatusText,
+} from "./utils/server.js"
 import {
   ServerRAMockWebSocket,
   ServerRAMockWebSocketServer,

@@ -1,3 +1,4 @@
+import sodium from "libsodium-wrappers"
 import {
   RAEncryptedHTTPRequest,
   RAEncryptedHTTPResponse,
@@ -7,9 +8,6 @@ import {
   ControlChannelEncryptedMessage,
   RAEncryptedMessage,
 } from "./types.js"
-import { generateRequestId } from "./utils/client.js"
-import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
-import sodium from "libsodium-wrappers"
 import {
   isControlChannelEncryptedMessage,
   isControlChannelKXAnnounce,
@@ -18,6 +16,8 @@ import {
   isRAEncryptedServerEvent,
   isRAEncryptedWSMessage,
 } from "./typeguards.js"
+import { generateRequestId } from "./utils/client.js"
+import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 
 export class RA {
   public ws: WebSocket | null = null

@@ -4,14 +4,14 @@ import {
   RAEncryptedClientCloseEvent,
   RAEncryptedServerEvent,
 } from "./types.js"
-import { generateConnectionId } from "./utils/client.js"
 import { RA } from "./client.js"
 import {
+  generateConnectionId,
   getOriginPort,
   toArrayBuffer,
   arrayBufferToBase64,
   base64ToArrayBuffer,
-} from "./utils.js"
+} from "./utils/client.js"
 
 export class ClientRAMockWebSocket extends EventTarget {
   public readonly CONNECTING = 0
