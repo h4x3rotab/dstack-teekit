@@ -20,6 +20,7 @@ import { generateRequestId } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 
 export class RA {
+  public id: string
   public ws: WebSocket | null = null
 
   public serverX25519PublicKey?: Uint8Array
@@ -33,11 +34,15 @@ export class RA {
   private reconnectDelay = 1000
   private connectionPromise: Promise<void> | null = null
 
-  constructor(public readonly origin: string) {}
+  private constructor(public readonly origin: string) {
+    this.id = Math.random().toString().slice(2)
+  }
 
   static async initialize(origin: string): Promise<RA> {
     await sodium.ready
-    return new RA(origin)
+    const ra = new RA(origin)
+    console.log("Initialized encrypted channel to", origin)
+    return ra
   }
 
   /**

@@ -5,7 +5,7 @@ import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
 import { RA } from "../tunnel/client.js"
 
-const ra = new RA("http://localhost:3001")
+const ra = await RA.initialize("http://localhost:3001")
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])

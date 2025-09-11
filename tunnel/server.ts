@@ -47,7 +47,7 @@ export class RA {
   >()
   private symmetricKeyBySocket = new Map<WebSocket, Uint8Array>()
 
-  constructor(
+  private constructor(
     private app: Express,
     publicKey: Uint8Array,
     privateKey: Uint8Array,
