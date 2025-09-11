@@ -40,9 +40,7 @@ export class RA {
 
   static async initialize(origin: string): Promise<RA> {
     await sodium.ready
-    const ra = new RA(origin)
-    console.log("Initialized encrypted channel to", origin)
-    return ra
+    return new RA(origin)
   }
 
   /**
@@ -166,6 +164,7 @@ export class RA {
               this.send(reply)
 
               this.connectionPromise = null
+              console.log("Opened encrypted channel to", this.origin)
               resolve()
             } catch (e) {
               this.connectionPromise = null
