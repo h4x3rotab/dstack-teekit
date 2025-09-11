@@ -22,7 +22,7 @@ import {
 
 export class RA {
   public server: http.Server
-  public wss: any
+  public wss: ServerRAMockWebSocketServer
   private controlWss: WebSocketServer
 
   public x25519PublicKey: Uint8Array
@@ -525,6 +525,9 @@ export class RA {
     return JSON.parse(text)
   }
 
+  /**
+   * Encrypt and send a payload.
+   */
   private sendEncrypted(controlWs: WebSocket, payload: unknown): void {
     const env = this.#encryptForSocket(controlWs, payload)
     controlWs.send(JSON.stringify(env))

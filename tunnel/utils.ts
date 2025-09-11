@@ -9,3 +9,9 @@ export function isTextData(data: Buffer): boolean {
   }
   return true
 }
+
+export function getOriginPort(origin: string): number {
+  const u = new URL(origin)
+  if (u.port) return Number(u.port)
+  return u.protocol === "https:" ? 443 : 80
+}

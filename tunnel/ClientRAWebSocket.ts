@@ -6,6 +6,7 @@ import {
 } from "./types.js"
 import { generateConnectionId } from "./utils/client.js"
 import { RA } from "./client.js"
+import { getOriginPort } from "./utils.js"
 
 export class ClientRAMockWebSocket extends EventTarget {
   public readonly CONNECTING = 0
@@ -47,7 +48,7 @@ export class ClientRAMockWebSocket extends EventTarget {
       await this.ra.ensureConnection()
 
       // Enforce that client WS targets the same server port as RA origin
-      const originPort = this.ra.getOriginPort()
+      const originPort = getOriginPort(this.ra.origin)
       const target = new URL(this.url)
       const targetPort = target.port
         ? Number(target.port)

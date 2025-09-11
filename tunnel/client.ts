@@ -6,6 +6,7 @@ import {
   ControlChannelKXAnnounce,
   ControlChannelKXConfirm,
   ControlChannelEncryptedMessage,
+  RAEncryptedMessage,
 } from "./types.js"
 import { generateRequestId } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
@@ -25,9 +26,7 @@ export class RA {
   private reconnectDelay = 1000
   private connectionPromise: Promise<void> | null = null
 
-  constructor(private origin: string) {
-    this.origin = origin
-  }
+  constructor(public readonly origin: string) {}
 
   static async initialize(origin: string): Promise<RA> {
     await sodium.ready
@@ -195,10 +194,9 @@ export class RA {
   }
 
   /**
-   * Low-level interfaces to the encrypted WebSocket.
+   * Direct interface to the encrypted WebSocket.
    */
-
-  public send(message: any): void {
+  public send(message: RAEncryptedMessage | ControlChannelKXConfirm): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       // Allow plaintext only for client_kx during handshake
       if (typeof message === "object" && message?.type === "client_kx") {
@@ -218,13 +216,7 @@ export class RA {
     }
   }
 
-  public getOriginPort(): number {
-    const u = new URL(this.origin)
-    if (u.port) return Number(u.port)
-    return u.protocol === "https:" ? 443 : 80
-  }
-
-  #encryptPayload(payload: unknown): ControlChannelEncryptedMessage {
+  #encryptPayload(payload: RAEncryptedMessage): ControlChannelEncryptedMessage {
     if (!this.symmetricKey) {
       throw new Error("Missing symmetric key")
     }
