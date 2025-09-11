@@ -6,7 +6,12 @@ import {
 } from "./types.js"
 import { generateConnectionId } from "./utils/client.js"
 import { RA } from "./client.js"
-import { getOriginPort } from "./utils.js"
+import {
+  getOriginPort,
+  toArrayBuffer,
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+} from "./utils.js"
 
 export class ClientRAMockWebSocket extends EventTarget {
   public readonly CONNECTING = 0
@@ -93,8 +98,8 @@ export class ClientRAMockWebSocket extends EventTarget {
         this.messageQueue.push(data)
       } else {
         // Convert binary data to base64 for queueing
-        const arrayBuffer = this.toArrayBuffer(data)
-        const base64 = this.arrayBufferToBase64(arrayBuffer)
+        const arrayBuffer = toArrayBuffer(data)
+        const base64 = arrayBufferToBase64(arrayBuffer)
         this.messageQueue.push(`binary:${base64}`)
       }
       return
@@ -112,8 +117,8 @@ export class ClientRAMockWebSocket extends EventTarget {
       dataType = "string"
     } else {
       // Convert binary data to base64 for transport
-      const arrayBuffer = this.toArrayBuffer(data)
-      messageData = this.arrayBufferToBase64(arrayBuffer)
+      const arrayBuffer = toArrayBuffer(data)
+      messageData = arrayBufferToBase64(arrayBuffer)
       dataType = "arraybuffer"
     }
 
@@ -175,7 +180,7 @@ export class ClientRAMockWebSocket extends EventTarget {
           if (queuedData.startsWith("binary:")) {
             // Decode base64 back to ArrayBuffer
             const base64 = queuedData.substring(7)
-            const arrayBuffer = this.base64ToArrayBuffer(base64)
+            const arrayBuffer = base64ToArrayBuffer(base64)
             this.send(arrayBuffer)
           } else {
             this.send(queuedData)
@@ -212,7 +217,7 @@ export class ClientRAMockWebSocket extends EventTarget {
   public handleTunnelMessage(message: RAEncryptedWSMessage): void {
     let messageData: any
     if (message.dataType === "arraybuffer") {
-      messageData = this.base64ToArrayBuffer(message.data)
+      messageData = base64ToArrayBuffer(message.data)
     } else {
       messageData = message.data
     }
@@ -237,41 +242,5 @@ export class ClientRAMockWebSocket extends EventTarget {
     }
   }
 
-  private toArrayBuffer(
-    data: ArrayBufferLike | Blob | ArrayBufferView,
-  ): ArrayBuffer {
-    if (data instanceof ArrayBuffer) {
-      return data
-    } else if (ArrayBuffer.isView(data)) {
-      const arrayBuffer = new ArrayBuffer(data.byteLength)
-      const out = new Uint8Array(arrayBuffer)
-      const input = new Uint8Array(
-        data.buffer as ArrayBufferLike,
-        data.byteOffset,
-        data.byteLength,
-      )
-      out.set(input)
-      return arrayBuffer
-    } else {
-      throw new Error("Blob data not supported yet")
-    }
-  }
-
-  private arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer)
-    let binary = ""
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i])
-    }
-    return (globalThis as any).btoa(binary)
-  }
-
-  private base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = (globalThis as any).atob(base64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    return bytes.buffer
-  }
+  // helpers are imported from utils.ts
 }
