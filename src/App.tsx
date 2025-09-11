@@ -1,11 +1,22 @@
-import { useState, useEffect, useRef, FormEvent, ChangeEvent, useCallback } from "react"
+import {
+  useState,
+  useEffect,
+  useRef,
+  FormEvent,
+  ChangeEvent,
+  useCallback,
+} from "react"
 import "./App.css"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
 import { RA } from "../tunnel/client.js"
 
-const ra = await RA.initialize("http://localhost:3001")
+const baseUrl =
+  document.location.hostname === "localhost"
+    ? "http://localhost:3001"
+    : "https://ra-https.up.railway.app"
+const ra = await RA.initialize(baseUrl)
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -26,7 +37,7 @@ function App() {
 
   const fetchUptime = useCallback(async () => {
     try {
-      const response = await ra.fetch("http://localhost:3001/uptime")
+      const response = await ra.fetch(baseUrl + "/uptime")
       const data: UptimeData = await response.json()
       setUptime(data.uptime.formatted)
     } catch (error) {
@@ -60,7 +71,10 @@ function App() {
       return
     }
 
-    const ws = new ra.WebSocket("ws://localhost:3001")
+    const wsUrl = baseUrl
+      .replace(/^http:\/\//, "ws://")
+      .replace(/^https:\/\//, "wss://")
+    const ws = new ra.WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -141,15 +155,19 @@ function App() {
             className={`status ${connected ? "connected" : "disconnected"}`}
           >
             {connected ? "🟢 Connected" : "🔴 Disconnected"}
-          </span>
-          {" "}
+          </span>{" "}
           <a
             href="#"
             onClick={(e) => {
               e.preventDefault()
               disconnectRA()
             }}
-            style={{ color: "#333", textDecoration: "underline", cursor: "pointer", fontSize: "0.85em" }}
+            style={{
+              color: "#333",
+              textDecoration: "underline",
+              cursor: "pointer",
+              fontSize: "0.85em",
+            }}
           >
             Disconnect
           </a>
@@ -166,7 +184,11 @@ function App() {
                 e.preventDefault()
                 fetchUptime()
               }}
-              style={{ color: "inherit", textDecoration: "underline", cursor: "pointer" }}
+              style={{
+                color: "inherit",
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
             >
               Refresh
             </a>
