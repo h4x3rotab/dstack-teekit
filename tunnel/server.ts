@@ -29,7 +29,7 @@ export class RA {
 
   private webSocketConnections = new Map<
     string,
-    { mockWs: ServerRAMockWebSocket; tunnelWs: WebSocket }
+    { mockWs: ServerRAMockWebSocket; controlWs: WebSocket }
   >()
   private symmetricKeyBySocket = new Map<WebSocket, Uint8Array>()
 
@@ -52,8 +52,8 @@ export class RA {
     this.server.on("upgrade", (req, socket, head) => {
       const url = req.url || ""
       if (url.startsWith("/__ra__")) {
-        this.controlWss.handleUpgrade(req, socket, head, (ws) => {
-          this.controlWss.emit("connection", ws, req)
+        this.controlWss.handleUpgrade(req, socket, head, (controlWs) => {
+          this.controlWss.emit("connection", controlWs, req)
         })
       } else {
         // Don't allow other WebSocket servers to bind to the server;
@@ -73,13 +73,11 @@ export class RA {
    * Intercept incoming WebSocket messages on `this.wss`.
    */
   private setupControlChannel(): void {
-    const ra = this
-    // Only intercept control connections on the private path
-    this.controlWss.on("connection", (ws: WebSocket) => {
+    this.controlWss.on("connection", (controlWs: WebSocket) => {
       console.log("New WebSocket connection, setting up control channel")
 
       // Intercept messages before they reach application handlers
-      const originalEmit = ws.emit.bind(ws)
+      const originalEmit = controlWs.emit.bind(controlWs)
 
       // Immediately announce server key-exchange public key to the client
       try {
@@ -87,21 +85,21 @@ export class RA {
           type: "server_kx",
           x25519PublicKey: Buffer.from(this.x25519PublicKey).toString("base64"),
         }
-        ws.send(JSON.stringify(serverKxMessage))
+        controlWs.send(JSON.stringify(serverKxMessage))
       } catch (e) {
         console.error("Failed to send server_kx message:", e)
       }
 
       // Cleanup on close
-      ws.on("close", () => {
-        this.symmetricKeyBySocket.delete(ws)
+      controlWs.on("close", () => {
+        this.symmetricKeyBySocket.delete(controlWs)
         try {
           const toRemove: string[] = []
           for (const [
             connectionId,
             conn,
           ] of this.webSocketConnections.entries()) {
-            if (conn.tunnelWs === ws) {
+            if (conn.controlWs === controlWs) {
               try {
                 conn.mockWs.emitClose(1006, "tunnel closed")
               } catch {}
@@ -109,7 +107,7 @@ export class RA {
                 this.wss.deleteClient(conn.mockWs)
               } catch {}
               try {
-                this.symmetricKeyBySocket.delete(conn.tunnelWs)
+                this.symmetricKeyBySocket.delete(conn.controlWs)
               } catch {}
               toRemove.push(connectionId)
             }
@@ -122,7 +120,7 @@ export class RA {
         }
       })
 
-      ws.emit = function (event: string, ...args: any[]): boolean {
+      controlWs.emit = function (event: string, ...args: any[]): boolean {
         if (event === "message") {
           const data = args[0] as Buffer
           try {
@@ -133,7 +131,7 @@ export class RA {
             if (message.type === "client_kx") {
               try {
                 // Only accept a single symmetric key per WebSocket
-                if (!ra.symmetricKeyBySocket.has(ws)) {
+                if (!ra.symmetricKeyBySocket.has(controlWs)) {
                   const sealed = sodium.from_base64(
                     message.sealedSymmetricKey,
                     sodium.base64_variants.ORIGINAL,
@@ -143,7 +141,7 @@ export class RA {
                     ra.x25519PublicKey,
                     ra.x25519PrivateKey,
                   )
-                  ra.symmetricKeyBySocket.set(ws, opened)
+                  ra.symmetricKeyBySocket.set(controlWs, opened)
                 } else {
                   console.warn(
                     "client_kx received after key already set; ignoring",
@@ -156,7 +154,7 @@ export class RA {
             }
 
             // If handshake not complete yet, ignore any other messages
-            if (!ra.symmetricKeyBySocket.has(ws)) {
+            if (!ra.symmetricKeyBySocket.has(controlWs)) {
               console.warn("Dropping message before handshake completion")
               return true
             }
@@ -171,7 +169,7 @@ export class RA {
             if (message.type === "enc") {
               try {
                 message = ra.decryptEnvelopeForSocket(
-                  ws,
+                  controlWs,
                   message as TunnelEncrypted,
                 )
               } catch (e) {
@@ -186,14 +184,14 @@ export class RA {
                 `Encrypted HTTP request (${message.requestId}): ${message.url}`,
               )
               ra.handleTunnelHttpRequest(
-                ws,
+                controlWs,
                 message as TunnelHTTPRequest,
               ).catch((error: Error) => {
                 console.error("Error handling encrypted request:", error)
 
                 // Send 500 error response back to client
                 try {
-                  ra.sendEncrypted(ws, {
+                  ra.sendEncrypted(controlWs, {
                     type: "http_response",
                     requestId: message.requestId,
                     status: 500,
@@ -209,7 +207,7 @@ export class RA {
               return true
             } else if (message.type === "ws_connect") {
               ra.handleTunnelWebSocketConnect(
-                ws,
+                controlWs,
                 message as TunnelWSClientConnect,
               )
               return true
@@ -233,13 +231,13 @@ export class RA {
           return true
         }
       }
-      ;(ws as any).ra = this
+      ;(controlWs as any).ra = this
     })
   }
 
   // Handle tunnel requests by synthesizing `fetch` events and passing to Express
   async handleTunnelHttpRequest(
-    ws: WebSocket,
+    controlWs: WebSocket,
     tunnelReq: TunnelHTTPRequest,
   ): Promise<void> {
     try {
@@ -280,7 +278,7 @@ export class RA {
         }
 
         try {
-          this.sendEncrypted(ws, response)
+          this.sendEncrypted(controlWs, response)
         } catch (e) {
           console.error("Failed to send encrypted http_response:", e)
         }
@@ -299,7 +297,7 @@ export class RA {
         }
 
         try {
-          this.sendEncrypted(ws, errorResponse)
+          this.sendEncrypted(controlWs, errorResponse)
         } catch (e) {
           console.error("Failed to send encrypted error http_response:", e)
         }
@@ -319,7 +317,7 @@ export class RA {
       }
 
       try {
-        this.sendEncrypted(ws, errorResponse)
+        this.sendEncrypted(controlWs, errorResponse)
       } catch (e) {
         console.error("Failed to send encrypted catch http_response:", e)
       }
@@ -327,7 +325,7 @@ export class RA {
   }
 
   async handleTunnelWebSocketConnect(
-    tunnelWs: WebSocket,
+    controlWs: WebSocket,
     connectReq: TunnelWSClientConnect,
   ): Promise<void> {
     try {
@@ -352,7 +350,7 @@ export class RA {
           error: errMsg,
         }
         try {
-          this.sendEncrypted(tunnelWs, event)
+          this.sendEncrypted(controlWs, event)
         } catch {}
         return
       }
@@ -385,7 +383,7 @@ export class RA {
             dataType,
           }
           try {
-            this.sendEncrypted(tunnelWs, message)
+            this.sendEncrypted(controlWs, message)
           } catch (e) {
             console.error("Failed to send encrypted ws_message:", e)
           }
@@ -400,7 +398,7 @@ export class RA {
             reason,
           }
           try {
-            this.sendEncrypted(tunnelWs, event)
+            this.sendEncrypted(controlWs, event)
           } catch (e) {
             console.error("Failed to send encrypted ws_event(close):", e)
           }
@@ -410,7 +408,7 @@ export class RA {
       // Track mapping
       this.webSocketConnections.set(connectReq.connectionId, {
         mockWs: mock,
-        tunnelWs,
+        controlWs: controlWs,
       })
 
       // Register with mock server and notify application
@@ -425,7 +423,7 @@ export class RA {
         eventType: "open",
       }
       try {
-        this.sendEncrypted(tunnelWs, openEvt)
+        this.sendEncrypted(controlWs, openEvt)
       } catch (e) {
         console.error("Failed to send encrypted ws_event(open):", e)
       }
@@ -438,7 +436,7 @@ export class RA {
         error: error instanceof Error ? error.message : "Connection failed",
       }
       try {
-        this.sendEncrypted(tunnelWs, event)
+        this.sendEncrypted(controlWs, event)
       } catch (e) {
         console.error("Failed to send encrypted ws_event(error catch):", e)
       }
@@ -495,8 +493,11 @@ export class RA {
     return true
   }
 
-  private encryptForSocket(ws: WebSocket, payload: unknown): TunnelEncrypted {
-    const key = this.symmetricKeyBySocket.get(ws)
+  private encryptForSocket(
+    controlWs: WebSocket,
+    payload: unknown,
+  ): TunnelEncrypted {
+    const key = this.symmetricKeyBySocket.get(controlWs)
     if (!key) {
       this.logWebSocketConnections()
       throw new Error("Missing symmetric key for socket (outbound)")
@@ -512,10 +513,10 @@ export class RA {
   }
 
   private decryptEnvelopeForSocket(
-    ws: WebSocket,
+    controlWs: WebSocket,
     envelope: TunnelEncrypted,
   ): unknown {
-    const key = this.symmetricKeyBySocket.get(ws)
+    const key = this.symmetricKeyBySocket.get(controlWs)
     if (!key) {
       this.logWebSocketConnections()
       throw new Error("Missing symmetric key for socket (inbound)")
@@ -533,9 +534,9 @@ export class RA {
     return JSON.parse(text)
   }
 
-  private sendEncrypted(ws: WebSocket, payload: unknown): void {
-    const env = this.encryptForSocket(ws, payload)
-    ws.send(JSON.stringify(env))
+  private sendEncrypted(controlWs: WebSocket, payload: unknown): void {
+    const env = this.encryptForSocket(controlWs, payload)
+    controlWs.send(JSON.stringify(env))
   }
 
   /**
@@ -546,7 +547,7 @@ export class RA {
     try {
       const entries = Array.from(this.webSocketConnections.entries())
       console.log(`WebSocket connections: ${entries.length}`)
-      for (const [connectionId, { tunnelWs }] of entries) {
+      for (const [connectionId, { controlWs: tunnelWs }] of entries) {
         const hasKey = this.symmetricKeyBySocket.has(tunnelWs)
         let state
         switch (tunnelWs.readyState) {
@@ -571,9 +572,9 @@ export class RA {
       }
 
       // Also warn if there are symmetric keys not tied to tracked connections
-      const trackedSockets = new Set(entries.map(([, v]) => v.tunnelWs))
+      const trackedSockets = new Set(entries.map(([, v]) => v.controlWs))
       const strayKeys = Array.from(this.symmetricKeyBySocket.keys()).filter(
-        (ws) => !trackedSockets.has(ws),
+        (controlWs) => !trackedSockets.has(controlWs),
       )
       if (strayKeys.length > 0) {
         console.warn(
