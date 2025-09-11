@@ -331,34 +331,6 @@ export class RA {
     connectReq: RAEncryptedClientConnectEvent,
   ): Promise<void> {
     try {
-      // Validate that the requested URL targets this server's port
-      const address = this.server.address()
-      const serverPort =
-        typeof address === "object" && address ? address.port : undefined
-      const targetUrl = new URL(connectReq.url)
-      const targetPort = targetUrl.port
-        ? Number(targetUrl.port)
-        : targetUrl.protocol === "wss:" || targetUrl.protocol === "https:"
-        ? 443
-        : 80
-
-      if (!serverPort || Number(serverPort) !== targetPort) {
-        const errMsg = `WS connect port mismatch: server=${serverPort} target=${targetPort}`
-        console.error(errMsg)
-        const event: RAEncryptedServerEvent = {
-          type: "ws_event",
-          connectionId: connectReq.connectionId,
-          eventType: "error",
-          error: errMsg,
-        }
-        try {
-          this.sendEncrypted(controlWs, event)
-        } catch {
-          console.error("failed to send encrypted ws_event(error):", event)
-        }
-        return
-      }
-
       // Create a mock socket and expose it to application via mock server
       const mock = new ServerRAMockWebSocket(
         // onSend: application -> client
