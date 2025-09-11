@@ -209,8 +209,6 @@ export class ClientRAMockWebSocket extends EventTarget {
   }
 
   public handleTunnelMessage(message: TunnelWSMessage): void {
-    if (this.readyState !== this.OPEN) return
-
     let messageData: any
     if (message.dataType === "arraybuffer") {
       messageData = this.base64ToArrayBuffer(message.data)
