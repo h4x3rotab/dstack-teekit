@@ -10,6 +10,7 @@ import {
 } from "./types.ts"
 
 import { RA } from "../tunnel/server.ts"
+import { ServerRAMockWebSocket } from "../tunnel/ServerRAWebSocket.ts"
 
 const app = express()
 const { server, wss } = await RA.initialize(app)
@@ -81,7 +82,7 @@ wss.on("connection", (ws: WebSocket) => {
           message: chatMessage,
         }
 
-        wss.clients.forEach((client: WebSocket) => {
+        wss.clients.forEach((client: ServerRAMockWebSocket) => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(broadcastMessage))
           }

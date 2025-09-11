@@ -13,6 +13,14 @@ import {
   RAEncryptedServerEvent,
   ControlChannelEncryptedMessage,
 } from "./types.js"
+import {
+  isControlChannelKXConfirm,
+  isControlChannelEncryptedMessage,
+  isRAEncryptedHTTPRequest,
+  isRAEncryptedClientConnectEvent,
+  isRAEncryptedWSMessage,
+  isRAEncryptedClientCloseEvent,
+} from "./typeguards.js"
 import { isTextData } from "./utils.js"
 import { parseBody, sanitizeHeaders, getStatusText } from "./utils/server.js"
 import {
@@ -94,30 +102,22 @@ export class RA {
       // Cleanup on close
       controlWs.on("close", () => {
         this.symmetricKeyBySocket.delete(controlWs)
-        try {
-          const toRemove: string[] = []
-          for (const [
-            connectionId,
-            conn,
-          ] of this.webSocketConnections.entries()) {
-            if (conn.controlWs === controlWs) {
-              try {
-                conn.mockWs.emitClose(1006, "tunnel closed")
-              } catch {}
-              try {
-                this.wss.deleteClient(conn.mockWs)
-              } catch {}
-              try {
-                this.symmetricKeyBySocket.delete(conn.controlWs)
-              } catch {}
-              toRemove.push(connectionId)
+
+        const toRemove: string[] = []
+        for (const [connId, conn] of this.webSocketConnections.entries()) {
+          if (conn.controlWs === controlWs) {
+            try {
+              conn.mockWs.emitClose(1006, "tunnel closed")
+              this.wss.deleteClient(conn.mockWs)
+              this.symmetricKeyBySocket.delete(conn.controlWs)
+              toRemove.push(connId)
+            } catch (e) {
+              console.error("Unexpected error cleaning up control ws:", e)
             }
           }
-          for (const id of toRemove) {
-            this.webSocketConnections.delete(id)
-          }
-        } catch (e) {
-          console.error("Failed to cleanup connections on tunnel close:", e)
+        }
+        for (const id of toRemove) {
+          this.webSocketConnections.delete(id)
         }
       })
 
@@ -129,7 +129,7 @@ export class RA {
             const ra = (this as any).ra as RA
 
             // Handle client key exchange
-            if (message.type === "client_kx") {
+            if (isControlChannelKXConfirm(message)) {
               try {
                 // Only accept a single symmetric key per WebSocket
                 if (!ra.symmetricKeyBySocket.has(controlWs)) {
@@ -161,13 +161,13 @@ export class RA {
             }
 
             // Require encryption post-handshake
-            if (message.type !== "enc") {
+            if (!isControlChannelEncryptedMessage(message)) {
               console.warn("Dropping non-encrypted message post-handshake")
               return true
             }
 
             // Decrypt envelope messages post-handshake
-            if (message.type === "enc") {
+            if (isControlChannelEncryptedMessage(message)) {
               try {
                 message = ra.#decryptEnvelopeForSocket(
                   controlWs,
@@ -179,46 +179,40 @@ export class RA {
               }
             }
 
-            if (message.type === "http_request") {
+            if (isRAEncryptedHTTPRequest(message)) {
               ra.logWebSocketConnections()
               console.log(
                 `Encrypted HTTP request (${message.requestId}): ${message.url}`,
               )
-              ra.#handleTunnelHttpRequest(
-                controlWs,
-                message as RAEncryptedHTTPRequest,
-              ).catch((error: Error) => {
-                console.error("Error handling encrypted request:", error)
+              ra.#handleTunnelHttpRequest(controlWs, message).catch(
+                (error: Error) => {
+                  console.error("Error handling encrypted request:", error)
 
-                // Send 500 error response back to client
-                try {
-                  ra.sendEncrypted(controlWs, {
-                    type: "http_response",
-                    requestId: message.requestId,
-                    status: 500,
-                    statusText: "Internal Server Error",
-                    headers: {},
-                    body: "",
-                    error: error.message,
-                  } as RAEncryptedHTTPResponse)
-                } catch (sendError) {
-                  console.error("Failed to send error response:", sendError)
-                }
-              })
-              return true
-            } else if (message.type === "ws_connect") {
-              ra.#handleTunnelWebSocketConnect(
-                controlWs,
-                message as RAEncryptedClientConnectEvent,
+                  // Send 500 error response back to client
+                  try {
+                    ra.sendEncrypted(controlWs, {
+                      type: "http_response",
+                      requestId: message.requestId,
+                      status: 500,
+                      statusText: "Internal Server Error",
+                      headers: {},
+                      body: "",
+                      error: error.message,
+                    } as RAEncryptedHTTPResponse)
+                  } catch (sendError) {
+                    console.error("Failed to send error response:", sendError)
+                  }
+                },
               )
               return true
-            } else if (message.type === "ws_message") {
-              ra.#handleTunnelWebSocketMessage(message as RAEncryptedWSMessage)
+            } else if (isRAEncryptedClientConnectEvent(message)) {
+              ra.#handleTunnelWebSocketConnect(controlWs, message)
               return true
-            } else if (message.type === "ws_close") {
-              ra.#handleTunnelWebSocketClose(
-                message as RAEncryptedClientCloseEvent,
-              )
+            } else if (isRAEncryptedWSMessage(message)) {
+              ra.#handleTunnelWebSocketMessage(message)
+              return true
+            } else if (isRAEncryptedClientCloseEvent(message)) {
+              ra.#handleTunnelWebSocketClose(message)
               return true
             }
           } catch (error) {
@@ -354,7 +348,9 @@ export class RA {
         }
         try {
           this.sendEncrypted(controlWs, event)
-        } catch {}
+        } catch {
+          console.error("failed to send encrypted ws_event(error):", event)
+        }
         return
       }
 
@@ -415,9 +411,7 @@ export class RA {
       })
 
       // Register with mock server and notify application
-      try {
-        this.wss.addClient(mock)
-      } catch {}
+      this.wss.addClient(mock)
 
       // Signal open to client
       const openEvt: RAEncryptedServerEvent = {
@@ -572,7 +566,7 @@ export class RA {
       )
       if (strayKeys.length > 0) {
         console.warn(
-          `Warning: ${strayKeys.length} symmetric key(s) not associated with a tracked connection`,
+          `- ${strayKeys.length} symmetric key(s) not associated with a tracked connection`,
         )
       }
     } catch (e) {

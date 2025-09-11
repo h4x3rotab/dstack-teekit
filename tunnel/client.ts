@@ -3,7 +3,6 @@ import {
   RAEncryptedHTTPResponse,
   RAEncryptedServerEvent,
   RAEncryptedWSMessage,
-  ControlChannelKXAnnounce,
   ControlChannelKXConfirm,
   ControlChannelEncryptedMessage,
   RAEncryptedMessage,
@@ -11,6 +10,14 @@ import {
 import { generateRequestId } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 import sodium from "libsodium-wrappers"
+import {
+  isControlChannelEncryptedMessage,
+  isControlChannelKXAnnounce,
+  isControlChannelKXConfirm,
+  isRAEncryptedHTTPResponse,
+  isRAEncryptedServerEvent,
+  isRAEncryptedWSMessage,
+} from "./typeguards.js"
 
 export class RA {
   public ws: WebSocket | null = null
@@ -131,11 +138,10 @@ export class RA {
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          if (message.type === "server_kx") {
+          if (isControlChannelKXAnnounce(message)) {
             try {
-              const serverKx = message as ControlChannelKXAnnounce
               const serverPub = sodium.from_base64(
-                serverKx.x25519PublicKey,
+                message.x25519PublicKey,
                 sodium.base64_variants.ORIGINAL,
               )
 
@@ -164,24 +170,19 @@ export class RA {
                   : new Error("Failed to process server_kx message"),
               )
             }
-          } else if (message.type === "enc") {
+          } else if (isControlChannelEncryptedMessage(message)) {
             // Decrypt and dispatch
             if (!this.symmetricKey) {
               throw new Error("Missing symmetric key for encrypted message")
             }
-            const decrypted = this.#decryptEnvelope(
-              message as ControlChannelEncryptedMessage,
-            )
-            if (decrypted.type === "http_response") {
-              this.#handleTunnelResponse(decrypted as RAEncryptedHTTPResponse)
-            } else if (decrypted.type === "ws_event") {
-              this.#handleWebSocketTunnelEvent(
-                decrypted as RAEncryptedServerEvent,
-              )
-            } else if (decrypted.type === "ws_message") {
-              this.#handleWebSocketTunnelMessage(
-                decrypted as RAEncryptedWSMessage,
-              )
+            const decrypted = this.#decryptEnvelope(message)
+
+            if (isRAEncryptedHTTPResponse(decrypted)) {
+              this.#handleTunnelResponse(decrypted)
+            } else if (isRAEncryptedServerEvent(decrypted)) {
+              this.#handleWebSocketTunnelEvent(decrypted)
+            } else if (isRAEncryptedWSMessage(decrypted)) {
+              this.#handleWebSocketTunnelMessage(decrypted)
             }
           }
         } catch (error) {
@@ -199,7 +200,7 @@ export class RA {
   public send(message: RAEncryptedMessage | ControlChannelKXConfirm): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       // Allow plaintext only for client_kx during handshake
-      if (typeof message === "object" && message?.type === "client_kx") {
+      if (isControlChannelKXConfirm(message)) {
         const data = JSON.stringify(message)
         this.ws.send(data)
         return
@@ -234,7 +235,7 @@ export class RA {
     }
   }
 
-  #decryptEnvelope(envelope: ControlChannelEncryptedMessage): any {
+  #decryptEnvelope(envelope: ControlChannelEncryptedMessage): unknown {
     if (!this.symmetricKey) {
       throw new Error("Missing symmetric key")
     }
