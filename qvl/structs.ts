@@ -98,6 +98,15 @@ export function parseTdxSignature(sig_data: Buffer) {
 
 export type TdxSignature = ReturnType<typeof parseTdxSignature>
 
+/**
+ * Compute the signed region of a TDX v4 quote: header + body (excludes sig length and sig_data)
+ */
+export function getTdxV4SignedRegion(quoteBytes: Buffer): Buffer {
+  const headerLen = TdxQuoteHeader.baseSize as number
+  const bodyLen = TdxQuoteBody_1_0.baseSize as number
+  return quoteBytes.subarray(0, headerLen + bodyLen)
+}
+
 export const TdxQuoteV4 = new Struct("TdxQuoteV4")
   .Struct("header", TdxQuoteHeader)
   .Struct("body", TdxQuoteBody_1_0)
