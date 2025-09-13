@@ -2,10 +2,11 @@ import test from "ava"
 import fs from "node:fs"
 
 import {
+  parseTdxQuote,
   parseTdxQuoteBase64,
   hex,
-  parseTdxQuote,
   reverseHexBytes,
+  verifyTdxV4Signature,
 } from "../qvl"
 
 test.skip("Parse an SGX attestation", async (t) => {
@@ -29,6 +30,7 @@ test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
 })
 
 test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
@@ -47,6 +49,8 @@ test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
+  // QE report checks require cert_data, which may be absent in this sample
 })
 
 test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
@@ -65,6 +69,7 @@ test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
 })
 
 test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
@@ -84,6 +89,7 @@ test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
 })
 
 test.serial("Parse a V4 TDX quote from Google Cloud", async (t) => {
@@ -105,6 +111,8 @@ test.serial("Parse a V4 TDX quote from Google Cloud", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
+  // QE checks omitted for this sample
 })
 
 test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
@@ -126,6 +134,7 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
 
   t.deepEqual(
     reverseHexBytes(hex(body.mr_seam)),
