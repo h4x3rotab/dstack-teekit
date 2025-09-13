@@ -1,7 +1,12 @@
 import test from "ava"
 import fs from "node:fs"
 
-import { parseTdxQuoteBase64, hex, parseTdxQuote } from "../qvl"
+import {
+  parseTdxQuoteBase64,
+  hex,
+  parseTdxQuote,
+  reverseHexBytes,
+} from "../qvl"
 
 test.skip("Parse an SGX attestation", async (t) => {
   // TODO
@@ -100,6 +105,64 @@ test.serial("Parse a V4 TDX quote from Google Cloud", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+})
+
+test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.bin")
+
+  const { header, body } = parseTdxQuote(quote)
+  // See: https://github.com/MoeMahhouk/tdx-quote-parser
+  const expectedMRTD = reverseHexBytes(
+    "18bcec2014a3ff000c46191e960ca4fe949f9adb2d8da557dbacee87f6ef7e2411fd5f09dc2b834506959bf69626ddf2",
+  )
+  const expectedReportData = reverseHexBytes(
+    "007945c010980ecf9e0c0daf6dc971bffce0eaab6d4e4b592d4c08bac29c234068adb241fa02c2ef9e443daecd91d450739c601321fe51738a6c978234758e27",
+  )
+
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+
+  t.deepEqual(
+    reverseHexBytes(hex(body.mr_seam)),
+    "30843fa6f79b6ad4c9460935ceac736f9ec16f60e47b5268a92767f30973a95a5ba02cee3c778a96c60e21109ad89097",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.mr_seam_signer)),
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.mr_config_id)),
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.mr_owner)),
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.mr_owner_config)),
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.rtmr0)),
+    "b29e90f91d6a29cfdaaa52adfd65f6c9f1dfacf2dfec14d0b7df44a72dac21a9f76986c4115ebefecb8dd50845209809",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.rtmr1)),
+    "930fc60b55e679f8348681094101c75399dc4776b19a32f6b0277f4872d8db978102cfb37c1f43eb6a71f12402103d38",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.rtmr2)),
+    "6a90479d9e688add2225c755b71c1acfa3cfa69fb4c2d2fb11ace12e0af1cf90440f577ec7b0dbbf7892d4f42fc4cfee",
+  )
+  t.deepEqual(
+    reverseHexBytes(hex(body.rtmr3)),
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  )
 })
 
 test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
