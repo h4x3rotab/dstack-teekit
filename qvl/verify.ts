@@ -1,5 +1,4 @@
-import { createPublicKey, createVerify } from "node:crypto"
-
+import { createPublicKey, createVerify, X509Certificate } from "node:crypto"
 import { getTdxV4SignedRegion, parseTdxQuote } from "./structs.js"
 import { encodeEcdsaSignatureToDer, toBase64Url } from "./utils.js"
 
@@ -53,6 +52,60 @@ export function extractPemCertificates(certData: Buffer): string[] {
     /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g
   const matches = text.match(pemRegex)
   return matches ? matches : []
+}
+
+/**
+ * Validate a PCK certificate chain embedded in cert_data.
+ * - Identifies the leaf certificate and walks up the chain, following issuer/subject chaining.
+ * - Expects at least two certificates.
+ * - Checks the validity window of each certificate.
+ */
+export function verifyProvisioningCertificationChain(
+  certData: Buffer,
+  { verifyAtTimeMs }: { verifyAtTimeMs: number },
+): { valid: boolean; root: X509Certificate | null } {
+  const pems = extractPemCertificates(certData)
+  if (pems.length === 0) return { valid: false, root: null }
+
+  const certs = pems.map((pem) => new X509Certificate(pem))
+
+  // Identify leaf (not an issuer of any other provided cert)
+  let leaf: X509Certificate | undefined
+  for (const c of certs) {
+    const isParentOfAny = certs.some((other) => other.issuer === c.subject)
+    if (!isParentOfAny) {
+      leaf = c
+      break
+    }
+  }
+  if (!leaf) leaf = certs[0]
+
+  // Walk up by issuer -> subject
+  const chain: X509Certificate[] = [leaf]
+  while (true) {
+    const current = chain[chain.length - 1]
+    const parent = certs.find((c) => c.subject === current.issuer)
+    if (!parent || parent === current) break
+    chain.push(parent)
+  }
+
+  // Validate chaining and validity windows
+  for (let i = 0; i < chain.length - 1; i++) {
+    const child = chain[i]
+    const parent = chain[i + 1]
+    if (child.issuer !== parent.subject) return { valid: false, root: null }
+  }
+
+  for (const c of chain) {
+    const notBefore = new Date(c.validFrom).getTime()
+    const notAfter = new Date(c.validTo).getTime()
+    if (!(notBefore <= verifyAtTimeMs && verifyAtTimeMs <= notAfter)) {
+      return { valid: false, root: chain[chain.length - 1] ?? null }
+    }
+  }
+
+  const root = chain[chain.length - 1] ?? null
+  return { valid: true, root }
 }
 
 // /** Verify qe_report_signature using PCK leaf certificate public key over qe_report */

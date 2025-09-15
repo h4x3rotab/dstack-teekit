@@ -8,6 +8,7 @@ import {
   reverseHexBytes,
   verifyTdxV4Signature,
   extractPemCertificates,
+  verifyProvisioningCertificationChain,
 } from "../qvl"
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
@@ -175,10 +176,16 @@ test.serial(
     t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
     t.true(verifyTdxV4Signature(quote))
 
-    const certs = signature.cert_data
-      ? extractPemCertificates(signature.cert_data)
-      : []
-    t.is(certs.length, 2)
+    t.truthy(signature.cert_data)
+    t.true(extractPemCertificates(signature.cert_data).length == 2)
+    const { valid, root } = verifyProvisioningCertificationChain(
+      signature.cert_data,
+      {
+        verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z"),
+      },
+    )
+    t.true(valid)
+    t.truthy(root)
   },
 )
 
