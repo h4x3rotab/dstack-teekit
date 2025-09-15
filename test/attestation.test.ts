@@ -11,7 +11,7 @@ import {
   verifyProvisioningCertificationChain,
   isPinnedRootCertificate,
   verifyQeReportSignature,
-  verifyQeReportBinding,
+  // verifyQeReportBinding,
 } from "../qvl"
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
