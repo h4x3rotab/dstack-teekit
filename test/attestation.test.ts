@@ -178,14 +178,30 @@ test.serial(
 
     t.truthy(signature.cert_data)
     t.true(extractPemCertificates(signature.cert_data).length == 2)
-    const { valid, root } = verifyProvisioningCertificationChain(
+    const { status, root } = verifyProvisioningCertificationChain(
       signature.cert_data,
       {
         verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z"),
       },
     )
-    t.true(valid)
+    t.is(status, "valid")
     t.truthy(root)
+
+    const { status: status2 } = verifyProvisioningCertificationChain(
+      signature.cert_data,
+      {
+        verifyAtTimeMs: Date.parse("2050-09-01T00:01:00Z"),
+      },
+    )
+    t.is(status2, "expired")
+
+    const { status: status3 } = verifyProvisioningCertificationChain(
+      signature.cert_data,
+      {
+        verifyAtTimeMs: Date.parse("2000-09-01T00:01:00Z"),
+      },
+    )
+    t.is(status3, "expired")
   },
 )
 

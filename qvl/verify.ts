@@ -63,9 +63,13 @@ export function extractPemCertificates(certData: Buffer): string[] {
 export function verifyProvisioningCertificationChain(
   certData: Buffer,
   { verifyAtTimeMs }: { verifyAtTimeMs: number },
-): { valid: boolean; root: X509Certificate | null } {
+): {
+  status: "valid" | "invalid" | "expired"
+  root: X509Certificate | null
+  chain: X509Certificate[]
+} {
   const pems = extractPemCertificates(certData)
-  if (pems.length === 0) return { valid: false, root: null }
+  if (pems.length === 0) return { status: "invalid", root: null, chain: [] }
 
   const certs = pems.map((pem) => new X509Certificate(pem))
 
@@ -93,19 +97,20 @@ export function verifyProvisioningCertificationChain(
   for (let i = 0; i < chain.length - 1; i++) {
     const child = chain[i]
     const parent = chain[i + 1]
-    if (child.issuer !== parent.subject) return { valid: false, root: null }
+    if (child.issuer !== parent.subject)
+      return { status: "invalid", root: null, chain: [] }
   }
 
+  // Check for expired or not-yet-valid certificates
   for (const c of chain) {
     const notBefore = new Date(c.validFrom).getTime()
     const notAfter = new Date(c.validTo).getTime()
     if (!(notBefore <= verifyAtTimeMs && verifyAtTimeMs <= notAfter)) {
-      return { valid: false, root: chain[chain.length - 1] ?? null }
+      return { status: "expired", root: chain[chain.length - 1] ?? null, chain }
     }
   }
 
-  const root = chain[chain.length - 1] ?? null
-  return { valid: true, root }
+  return { status: "valid", root: chain[chain.length - 1] ?? null, chain }
 }
 
 // /** Verify qe_report_signature using PCK leaf certificate public key over qe_report */
