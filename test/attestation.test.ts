@@ -7,17 +7,14 @@ import {
   hex,
   reverseHexBytes,
   verifyTdxV4Signature,
+  extractPemCertificates,
 } from "../qvl"
-
-test.skip("Parse an SGX attestation", async (t) => {
-  // TODO
-})
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
-  const { header, body } = parseTdxQuote(quote)
+  const { header, body, signature } = parseTdxQuote(quote)
   const expectedMRTD =
     "c68518a0ebb42136c12b2275164f8c72f25fa9a34392228687ed6e9caeb9c0f1dbd895e9cf475121c029dc47e70e91fd"
   const expectedReportData =
@@ -31,12 +28,13 @@ test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
+  t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-edgeless.bin")
 
-  const { header, body } = parseTdxQuote(quote)
+  const { header, body, signature } = parseTdxQuote(quote)
   const expectedMRTD =
     "b65ea009e424e6f761fdd3d7c8962439453b37ecdf62da04f7bc5d327686bb8bafc8a5d24a9c31cee60e4aba87c2f71b"
   const expectedReportData =
@@ -50,13 +48,13 @@ test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  // QE report checks require cert_data, which may be absent in this sample
+  t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-phala.bin")
 
-  const { header, body } = parseTdxQuote(quote)
+  const { header, body, signature } = parseTdxQuote(quote)
   const expectedMRTD =
     "91eb2b44d141d4ece09f0c75c2c53d247a3c68edd7fafe8a3520c942a604a407de03ae6dc5f87f27428b2538873118b7"
   const expectedReportData =
@@ -70,13 +68,14 @@ test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
+  t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-phala.hex", "utf-8")
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
-  const { header, body } = parseTdxQuote(quote)
+  const { header, body, signature } = parseTdxQuote(quote)
   const expectedMRTD =
     "7ba9e262ce6979087e34632603f354dd8f8a870f5947d116af8114db6c9d0d74c48bec4280e5b4f4a37025a10905bb29"
   const expectedReportData =
@@ -90,35 +89,13 @@ test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-})
-
-test.serial("Parse a V4 TDX quote from Google Cloud", async (t) => {
-  const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
-  )
-  const quote: string = data.tdx.quote
-  const { header, body } = parseTdxQuoteBase64(quote)
-
-  const expectedMRTD =
-    "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
-  const expectedReportData =
-    "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
-
-  t.is(header.version, 4)
-  t.is(header.tee_type, 129)
-  t.is(hex(body.mr_td), expectedMRTD)
-  t.is(hex(body.report_data), expectedReportData)
-  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
-  t.deepEqual(body.mr_owner, Buffer.alloc(48))
-  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
-  // QE checks omitted for this sample
+  t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.bin")
 
-  const { header, body } = parseTdxQuote(quote)
+  const { header, body, signature } = parseTdxQuote(quote)
   // See: https://github.com/MoeMahhouk/tdx-quote-parser
   const expectedMRTD = reverseHexBytes(
     "18bcec2014a3ff000c46191e960ca4fe949f9adb2d8da557dbacee87f6ef7e2411fd5f09dc2b834506959bf69626ddf2",
@@ -135,6 +112,7 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
+  t.is(signature.cert_data, null) // Quote is missing cert data
 
   t.deepEqual(
     reverseHexBytes(hex(body.mr_seam)),
@@ -174,26 +152,44 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   )
 })
 
-test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
-  // TODO
-})
+test.serial(
+  "Verify a V4 TDX quote from Google Cloud, including the full cert chain",
+  async (t) => {
+    const data = JSON.parse(
+      fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+    )
+    const quote: string = data.tdx.quote
+    const { header, body, signature } = parseTdxQuoteBase64(quote)
 
-test.skip("Parse a V5 TDX 1.5 attestation", async (t) => {
-  // TODO
-})
+    const expectedMRTD =
+      "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
+    const expectedReportData =
+      "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
 
-test.skip("Verify an SGX attestation", async (t) => {
-  // TODO
-})
+    t.is(header.version, 4)
+    t.is(header.tee_type, 129)
+    t.is(hex(body.mr_td), expectedMRTD)
+    t.is(hex(body.report_data), expectedReportData)
+    t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+    t.deepEqual(body.mr_owner, Buffer.alloc(48))
+    t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+    t.true(verifyTdxV4Signature(quote))
 
-test.skip("Verify a V4 TDX attestation from Google Cloud", async (t) => {
-  // TODO
-})
+    const certs = signature.cert_data
+      ? extractPemCertificates(signature.cert_data)
+      : []
+    t.is(certs.length, 2)
+  },
+)
 
-test.skip("Verify a V5 TDX 1.0 attestation", async (t) => {
-  // TODO
-})
+// test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
+//   // TODO
+// })
 
-test.skip("Verify a V5 TDX 1.5 attestation", async (t) => {
-  // TODO
-})
+// test.skip("Parse a V5 TDX 1.5 attestation", async (t) => {
+//   // TODO
+// })
+
+// test.skip("Parse an SGX attestation", async (t) => {
+//   // TODO
+// })
