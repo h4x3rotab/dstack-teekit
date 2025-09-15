@@ -9,7 +9,9 @@ import {
   verifyTdxV4Signature,
   extractPemCertificates,
   verifyProvisioningCertificationChain,
-  isIntelSgxRootCertificate,
+  isPinnedRootCertificate,
+  verifyQeReportSignature,
+  verifyQeReportBinding,
 } from "../qvl"
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
@@ -181,12 +183,12 @@ test.serial(
     t.true(extractPemCertificates(signature.cert_data).length == 2)
     const { status, root } = verifyProvisioningCertificationChain(
       signature.cert_data,
-      {
-        verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z"),
-      },
+      { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
     )
     t.is(status, "valid")
-    t.true(root && isIntelSgxRootCertificate(root, "test/certs"))
+    t.true(root && isPinnedRootCertificate(root, "test/certs"))
+    // t.true(verifyQeReportBinding(quote))
+    t.true(verifyQeReportSignature(quote))
 
     // Verifier returns expired if any certificate is expired
     const { status: status2 } = verifyProvisioningCertificationChain(
