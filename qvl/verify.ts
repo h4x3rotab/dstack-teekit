@@ -1,6 +1,18 @@
-import { createPublicKey, createVerify, X509Certificate } from "node:crypto"
+import {
+  createPublicKey,
+  createVerify,
+  X509Certificate,
+  createHash,
+} from "node:crypto"
+
 import { getTdxV4SignedRegion, parseTdxQuote } from "./structs.js"
-import { encodeEcdsaSignatureToDer, toBase64Url } from "./utils.js"
+import {
+  computeCertSha256Hex,
+  encodeEcdsaSignatureToDer,
+  extractPemCertificates,
+  loadRootCerts,
+  toBase64Url,
+} from "./utils.js"
 
 /**
  * Verify the ECDSA-P256 signature inside a TDX v4 quote against the embedded
@@ -43,15 +55,6 @@ export function verifyTdxV4Signature(quoteInput: string | Buffer): boolean {
   verifier.update(message)
   verifier.end()
   return verifier.verify(publicKey, derSig)
-}
-
-/** Extract PEM certificates embedded in DCAP cert_data (type 5) */
-export function extractPemCertificates(certData: Buffer): string[] {
-  const text = certData.toString("utf8")
-  const pemRegex =
-    /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g
-  const matches = text.match(pemRegex)
-  return matches ? matches : []
 }
 
 /**
@@ -111,6 +114,26 @@ export function verifyProvisioningCertificationChain(
   }
 
   return { status: "valid", root: chain[chain.length - 1] ?? null, chain }
+}
+
+/** Compare a provided root cert to fetched Intel SGX root certs by SHA-256 hash. */
+export function isIntelSgxRootCertificate(
+  candidateRoot: X509Certificate,
+  certsDirectory: string,
+): boolean {
+  // Check for Intel root identity subject fragments
+  const EXPECTED_ROOT_CN = "CN=Intel SGX Root CA"
+  const EXPECTED_ROOT_O = "O=Intel Corporation"
+  const EXPECTED_ROOT_C = "C=US"
+  if (!candidateRoot.issuer.includes(EXPECTED_ROOT_CN)) return false
+  if (!candidateRoot.issuer.includes(EXPECTED_ROOT_O)) return false
+  if (!candidateRoot.issuer.includes(EXPECTED_ROOT_C)) return false
+
+  const knownRoots = loadRootCerts(certsDirectory)
+  if (knownRoots.length === 0) return false
+  const candidateHash = computeCertSha256Hex(candidateRoot)
+  const knownHashes = new Set(knownRoots.map(computeCertSha256Hex))
+  return knownHashes.has(candidateHash)
 }
 
 // /** Verify qe_report_signature using PCK leaf certificate public key over qe_report */
