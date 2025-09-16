@@ -102,6 +102,11 @@ export function verifyQeReportSignature(
   const { header, signature } = parseTdxQuote(quoteBytes)
   if (header.version !== 4) throw new Error("Unsupported quote version")
 
+  // Must have a QE report to verify
+  if (!signature.qe_report_present || signature.qe_report.length !== 384) {
+    return false
+  }
+
   // Prefer explicitly provided certs; otherwise try to extract from cert_data in the quote
   let certs: string[] = Array.isArray(certsInput) ? certsInput : []
   if (certs.length === 0 && signature.cert_data) {
@@ -116,83 +121,26 @@ export function verifyQeReportSignature(
   })
   if (chain.length === 0) return false
 
-  // Prefer keys in chain order (leaf first), but also try any provided certs as a fallback
-  const candidateKeys: Array<ReturnType<X509Certificate["publicKey"]>> = [
-    ...chain.map((c) => c.publicKey),
-    ...(certs
-      .map((pem) => {
-        try {
-          return new X509Certificate(pem).publicKey
-        } catch {
-          return undefined as unknown as ReturnType<
-            X509Certificate["publicKey"]
-          >
-        }
-      })
-      .filter(Boolean) as Array<ReturnType<X509Certificate["publicKey"]>>),
-  ]
+  // Use the PCK leaf certificate (first in chain) - this is the standard approach
+  const pckLeafCert = chain[0]
+  const pckLeafKey = pckLeafCert.publicKey
 
-  // Try common hash algorithms with both DER and IEEE-P1363 encodings
-  const hashAlgorithms: Array<"sha256" | "sha384" | "sha512"> = [
-    "sha256",
-    "sha384",
-    "sha512",
-  ]
+  // Following Intel's C++ implementation:
+  // 1. Convert raw ECDSA signature (64 bytes: r||s) to DER format
+  // 2. Verify with SHA-256 against the raw QE report blob (384 bytes)
+  try {
+    const derSignature = encodeEcdsaSignatureToDer(
+      signature.qe_report_signature,
+    )
+    const verifier = createVerify("sha256")
+    verifier.update(signature.qe_report)
+    verifier.end()
+    const result = verifier.verify(pckLeafKey, derSignature)
 
-  for (const algo of hashAlgorithms) {
-    for (const key of candidateKeys) {
-      // Strategy A: DER signature
-      try {
-        const derSig = encodeEcdsaSignatureToDer(signature.qe_report_signature)
-        const verifierA = createVerify(algo)
-        verifierA.update(signature.qe_report)
-        verifierA.end()
-        if (verifierA.verify(key, derSig)) return true
-      } catch {}
-
-      // Strategy B: IEEE-P1363 raw (r||s)
-      try {
-        const verifierB = createVerify(algo)
-        verifierB.update(signature.qe_report)
-        verifierB.end()
-        if (
-          verifierB.verify(
-            { key, dsaEncoding: "ieee-p1363" as const },
-            signature.qe_report_signature,
-          )
-        )
-          return true
-      } catch {}
-
-      // Strategy C: Handle potential little-endian r||s encodings by reversing each half
-      try {
-        const raw = signature.qe_report_signature
-        if (raw.length === 64) {
-          const rLE = Buffer.from(raw.subarray(0, 32))
-          const sLE = Buffer.from(raw.subarray(32, 64))
-          rLE.reverse()
-          sLE.reverse()
-          const reversed = Buffer.concat([rLE, sLE])
-
-          // Verify IEEE-P1363 with reversed halves
-          const verifierC = createVerify(algo)
-          verifierC.update(signature.qe_report)
-          verifierC.end()
-          if (verifierC.verify({ key, dsaEncoding: "ieee-p1363" }, reversed))
-            return true
-
-          // Verify DER with reversed halves
-          const derReversed = encodeEcdsaSignatureToDer(reversed)
-          const verifierD = createVerify(algo)
-          verifierD.update(signature.qe_report)
-          verifierD.end()
-          if (verifierD.verify(key, derReversed)) return true
-        }
-      } catch {}
-    }
+    return result
+  } catch {
+    return false
   }
-
-  return false
 }
 
 /**
@@ -247,14 +195,18 @@ export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
 
   // Direct half comparisons (prefer second half, then first)
   for (const digest of candidates) {
-    if (digest.equals(second) || digest.equals(first)) return true
+    if (digest.equals(second) || digest.equals(first)) {
+      return true
+    }
   }
 
   // Some ecosystem implementations have placed the digest starting at a non-zero offset
   // within report_data. As a pragmatic fallback, look for any candidate digest as a
   // contiguous 32-byte subsequence anywhere within the 64-byte report_data field.
   for (const digest of candidates) {
-    if (reportData.indexOf(digest) !== -1) return true
+    if (reportData.indexOf(digest) !== -1) {
+      return true
+    }
   }
 
   return false

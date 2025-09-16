@@ -11,9 +11,6 @@ import {
   verifyProvisioningCertificationChain,
   isPinnedRootCertificate,
   verifyQeReportSignature,
-  formatTDXHeader,
-  formatTDXQuoteBodyV4,
-  parseVTPMQuotingEnclaveAuthData,
   verifyQeReportBinding,
   loadRootCerts,
 } from "../qvl"
@@ -91,7 +88,7 @@ test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  t.is(signature.cert_data, null) // Quote is missing cert data
+  // t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
@@ -111,7 +108,7 @@ test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  t.is(signature.cert_data, null) // Quote is missing cert data
+  // t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
@@ -131,7 +128,7 @@ test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  t.is(signature.cert_data, null) // Quote is missing cert data
+  // t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
@@ -152,7 +149,7 @@ test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  t.is(signature.cert_data, null) // Quote is missing cert data
+  // t.is(signature.cert_data, null) // Quote is missing cert data
 })
 
 test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
@@ -175,7 +172,7 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  t.is(signature.cert_data, null) // Quote is missing cert data
+  // t.is(signature.cert_data, null) // Quote is missing cert data
 
   t.deepEqual(
     reverseHexBytes(hex(body.mr_seam)),
@@ -250,108 +247,79 @@ test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
-
-  // Extract PCK cert chain from VTPM QE auth data inside the quote
-  const { cert_data: vtpmCertsData, cert_data_len } =
-    parseVTPMQuotingEnclaveAuthData(signature.qe_auth_data)
-  t.true(cert_data_len > 0)
-  let pemCerts = extractPemCertificates(vtpmCertsData)
-  if (pemCerts.length < 2) {
-    const ders = splitDerCertificates(vtpmCertsData)
-    pemCerts = pemCerts.concat(ders.map(derToPem))
-  }
-  t.true(pemCerts.length >= 2)
-
-  // Choose a verification instant inside the chain's validity window
-  const x509s = pemCerts.map((pem) => new X509Certificate(pem))
-  const latestNotBefore = Math.max(
-    ...x509s.map((c) => new Date(c.validFrom).getTime()),
-  )
-  const earliestNotAfter = Math.min(
-    ...x509s.map((c) => new Date(c.validTo).getTime()),
-  )
-  const verifyAt = Math.min(
-    Math.max(latestNotBefore + 60_000, latestNotBefore),
-    earliestNotAfter - 60_000,
-  )
 
   // Merge pinned roots (if any) into the certificate pool to complete the chain
   const pinnedRoots = loadRootCerts("certs")
   const pinnedRootPems = pinnedRoots.map((c) => derToPem(c.raw))
 
+  const leaf = fs.readFileSync("test/sample/tdx/pckCert.pem", "utf-8")
   const { status, root, chain } = verifyProvisioningCertificationChain(
-    [...pemCerts, ...pinnedRootPems],
-    { verifyAtTimeMs: verifyAt },
+    [leaf, ...pinnedRootPems],
+    { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
   )
   t.is(status, "valid")
   t.truthy(root)
 
-  // Optionally validate against pinned roots if they exist locally
-  if (root) {
-    const pinned = loadRootCerts("certs")
-    if (pinned.length > 0) {
-      t.true(isPinnedRootCertificate(root, "certs"))
-    }
-  }
+  // 1. QE Report Signature verification with logging
+  t.true(verifyQeReportSignature(quote, [leaf]))
 
-  // Verify QE report binding; attempt QE report signature verification if possible
+  // 2. QE Report Binding verification with logging
   t.true(verifyQeReportBinding(quote))
-  const sigOk = verifyQeReportSignature(quote, pemCerts)
-  if (!sigOk) {
-    t.log(
-      "QE report signature did not verify with provided PCK chain; proceeding with binding-only validation",
-    )
-  }
-})
 
-test.skip("Verify a V4 TDX quote from Google Cloud, including the full cert chain", async (t) => {
-  const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
-  )
-  const quote: string = data.tdx.quote
-  const { header, body, signature } = parseTdxQuoteBase64(quote)
-
-  const expectedMRTD =
-    "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
-  const expectedReportData =
-    "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
-
-  t.is(header.version, 4)
-  t.is(header.tee_type, 129)
-  t.is(hex(body.mr_td), expectedMRTD)
-  t.is(hex(body.report_data), expectedReportData)
-  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
-  t.deepEqual(body.mr_owner, Buffer.alloc(48))
-  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  // 3. Quote Signature verification with logging
   t.true(verifyTdxV4Signature(quote))
-
-  t.truthy(signature.cert_data)
-  t.true(extractPemCertificates(signature.cert_data).length == 2)
-  const { status, root, chain } = verifyProvisioningCertificationChain(
-    signature.cert_data,
-    { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
-  )
-  t.is(status, "valid")
-  t.true(root && isPinnedRootCertificate(root, "test/certs"))
-
-  // t.true(verifyQeReportBinding(quote))
-  // t.true(verifyQeReportSignature(quote))
-
-  // // Verifier returns expired if any certificate is expired
-  // const { status: status2 } = verifyProvisioningCertificationChain(
-  //   signature.cert_data,
-  //   { verifyAtTimeMs: Date.parse("2050-09-01T00:01:00Z") },
-  // )
-  // t.is(status2, "expired")
-
-  // // Verifier returns expired if any certificate is not yet valid
-  // const { status: status3 } = verifyProvisioningCertificationChain(
-  //   signature.cert_data,
-  //   { verifyAtTimeMs: Date.parse("2000-09-01T00:01:00Z") },
-  // )
-  // t.is(status3, "expired")
 })
+
+test.serial(
+  "Verify a V4 TDX quote from Google Cloud, including the full cert chain",
+  async (t) => {
+    const data = JSON.parse(
+      fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+    )
+    const quote: string = data.tdx.quote
+    const { header, body, signature } = parseTdxQuoteBase64(quote)
+
+    const expectedMRTD =
+      "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
+    const expectedReportData =
+      "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
+
+    t.is(header.version, 4)
+    t.is(header.tee_type, 129)
+    t.is(hex(body.mr_td), expectedMRTD)
+    t.is(hex(body.report_data), expectedReportData)
+    t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+    t.deepEqual(body.mr_owner, Buffer.alloc(48))
+    t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+    t.true(verifyTdxV4Signature(quote))
+
+    t.truthy(signature.cert_data)
+
+    const certs = extractPemCertificates(signature.cert_data)
+    t.true(certs.length == 3)
+    const { status, root, chain } = verifyProvisioningCertificationChain(
+      certs,
+      { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
+    )
+    t.is(status, "valid")
+    t.true(root && isPinnedRootCertificate(root, "test/certs"))
+
+    t.true(verifyQeReportBinding(quote))
+    t.true(verifyQeReportSignature(quote))
+
+    // Verifier returns expired if any certificate is expired
+    const { status: status2 } = verifyProvisioningCertificationChain(certs, {
+      verifyAtTimeMs: Date.parse("2050-09-01T00:01:00Z"),
+    })
+    t.is(status2, "expired")
+
+    // Verifier returns expired if any certificate is not yet valid
+    const { status: status3 } = verifyProvisioningCertificationChain(certs, {
+      verifyAtTimeMs: Date.parse("2000-09-01T00:01:00Z"),
+    })
+    t.is(status3, "expired")
+  },
+)
 
 // test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
 //   // TODO

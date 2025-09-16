@@ -56,6 +56,7 @@ export function parseTdxSignature(sig_data: Buffer) {
   const EcdsaSigFixed = new Struct("EcdsaSigFixed")
     .Buffer("signature", 64)
     .Buffer("attestation_public_key", 64)
+    .Buffer("unknown", 6)
     .Buffer("qe_report", 384)
     .Buffer("qe_report_signature", 64)
     .UInt16LE("qe_auth_data_len")
@@ -70,16 +71,17 @@ export function parseTdxSignature(sig_data: Buffer) {
   const Tail = new Struct("Tail")
     .UInt16LE("cert_data_type")
     .UInt32LE("cert_data_len")
-    .Buffer("cert_data")
     .compile()
 
-  let tail
-  try {
-    const { cert_data_len } = new Tail(
-      sig_data.slice(offset, offset + Tail.baseSize),
-    )
-    tail = new Tail(sig_data.slice(offset, offset + cert_data_len))
-  } catch {}
+  const { cert_data_type, cert_data_len } = new Tail(
+    sig_data.slice(offset, offset + Tail.baseSize),
+  )
+  offset += Tail.baseSize
+
+  const CertData = new Struct("CertData")
+    .Buffer("cert_data", cert_data_len)
+    .compile()
+  const { cert_data } = new CertData(sig_data.slice(offset))
 
   return {
     ecdsa_signature: fixed.signature,
@@ -88,11 +90,10 @@ export function parseTdxSignature(sig_data: Buffer) {
     qe_report_present: fixed.qe_report.length === 384,
     qe_report_signature: fixed.qe_report_signature,
     qe_auth_data_len: fixed.qe_auth_data_len,
-    qe_auth_data: qe_auth_data,
-    cert_data_type: tail ? tail.cert_data_type : null,
-    cert_data_len: tail ? tail.cert_data_len : null,
-    cert_data_prefix: tail ? tail.cert_data.slice(0, 32) : null,
-    cert_data: tail ? tail.cert_data : null,
+    qe_auth_data,
+    cert_data_type,
+    cert_data_len,
+    cert_data,
   }
 }
 
