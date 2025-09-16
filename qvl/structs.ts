@@ -75,7 +75,7 @@ export function parseTdxSignature(sig_data: Buffer) {
 
   let tail
   try {
-    const { cert_data_type, cert_data_len } = new Tail(
+    const { cert_data_len } = new Tail(
       sig_data.slice(offset, offset + Tail.baseSize),
     )
     tail = new Tail(sig_data.slice(offset, offset + cert_data_len))

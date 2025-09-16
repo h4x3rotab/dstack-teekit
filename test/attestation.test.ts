@@ -16,9 +16,6 @@ import {
   parseVTPMQuotingEnclaveAuthData,
   // verifyQeReportBinding,
 } from "../qvl"
-import jwt from "jsonwebtoken"
-import { X509Certificate } from "node:crypto"
-import { Struct } from "typed-struct"
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
@@ -204,11 +201,15 @@ test.serial("Parse a V4 TDX quote from Azure - vtpm", async (t) => {
   )
   t.true(extractPemCertificates(cert_data).length === 3)
   const { status, root, chain } = verifyProvisioningCertificationChain(
-    cert_data,
+    extractPemCertificates(cert_data),
     { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
   )
   t.is(status, "valid")
   t.true(root && isPinnedRootCertificate(root, "test/certs"))
+
+  // t.true(verifyQeReportBinding(quote)))
+  t.true(verifyQeReportSignature(quote, extractPemCertificates(cert_data)))
+
   console.log(chain[0].subject)
   console.log(chain[1].subject)
   console.log(chain[2].subject)

@@ -4,7 +4,6 @@ import { getTdxV4SignedRegion, parseTdxQuote } from "./structs.js"
 import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,
-  extractPemCertificates,
   loadRootCerts,
   toBase64Url,
 } from "./utils.js"
@@ -39,17 +38,16 @@ export function isPinnedRootCertificate(
  * - Checks the validity window of each certificate.
  */
 export function verifyProvisioningCertificationChain(
-  certData: Buffer,
+  certData: string[],
   { verifyAtTimeMs }: { verifyAtTimeMs: number },
 ): {
   status: "valid" | "invalid" | "expired"
   root: X509Certificate | null
   chain: X509Certificate[]
 } {
-  const pems = extractPemCertificates(certData)
-  if (pems.length === 0) return { status: "invalid", root: null, chain: [] }
+  if (certData.length === 0) return { status: "invalid", root: null, chain: [] }
 
-  const certs = pems.map((pem) => new X509Certificate(pem))
+  const certs = certData.map((text) => new X509Certificate(text))
 
   // Identify leaf (not an issuer of any other provided cert)
   let leaf: X509Certificate | undefined
@@ -95,16 +93,18 @@ export function verifyProvisioningCertificationChain(
  * Verify that the cert chain has signed the quoting enclave report,
  * by checking qe_report_signature against the PCK leaf certificate public key.
  */
-export function verifyQeReportSignature(quote: string | Buffer): boolean {
+export function verifyQeReportSignature(
+  quote: string | Buffer, // TODO: take just what we need to verify
+  certs: string[],
+): boolean {
   const quoteBytes = Buffer.isBuffer(quote)
     ? quote
     : Buffer.from(quote, "base64")
 
   const { header, signature } = parseTdxQuote(quoteBytes)
   if (header.version !== 4) throw new Error("Unsupported quote version")
-  if (!signature.cert_data) throw new Error("Missing cert_data in quote")
 
-  const { chain } = verifyProvisioningCertificationChain(signature.cert_data, {
+  const { chain } = verifyProvisioningCertificationChain(certs, {
     verifyAtTimeMs: 0,
   })
   if (chain.length === 0) return false
