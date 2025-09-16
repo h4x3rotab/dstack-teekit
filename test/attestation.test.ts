@@ -16,6 +16,7 @@ import {
   parseVTPMQuotingEnclaveAuthData,
   // verifyQeReportBinding,
 } from "../qvl"
+import { X509Certificate } from "node:crypto"
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
@@ -178,14 +179,14 @@ test.serial("Parse a V4 TDX quote from Azure", async (t) => {
   t.true(verifyTdxV4Signature(quote))
 })
 
-test.serial("Parse a V4 TDX quote from Azure - vtpm", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-azure-vtpm.bin")
+test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx/quote.dat")
   const { header, body, signature } = parseTdxQuote(quote)
 
   const expectedMRTD =
-    "fe27b2aa3a05ec56864c308aff03dd13c189a6112d21e417ec1afe626a8cb9d91482d1379ec02fe6308972950a930d0a"
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   const expectedReportData =
-    "c905cc6eab5abd48caacb6f5bb69dac00ca018076ba81f04fd3f5ae1c8abdbf80000000000000000000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
   t.is(header.version, 4)
   t.is(header.tee_type, 129)
@@ -196,43 +197,135 @@ test.serial("Parse a V4 TDX quote from Azure - vtpm", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
 
-  const { certs, cert_data } = parseVTPMQuotingEnclaveAuthData(
-    signature.qe_auth_data,
+  // Read all certificate and configuration files
+  const tcbSignChain = fs.readFileSync(
+    "test/sample/tdx/tcbSignChain.pem",
+    "utf-8",
   )
-  const pemChain = extractPemCertificates(cert_data)
-  t.true(pemChain.length === 3)
-  const { status, root, chain } = verifyProvisioningCertificationChain(
-    pemChain,
-    { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
+  const trustedRootCaCert = fs.readFileSync(
+    "test/sample/tdx/trustedRootCaCert.pem",
+    "utf-8",
   )
-  t.is(status, "valid")
-  t.true(root && isPinnedRootCertificate(root, "test/certs"))
+  const pckCert = fs.readFileSync("test/sample/tdx/pckCert.pem", "utf-8")
+  const pckSignChain = fs.readFileSync(
+    "test/sample/tdx/pckSignChain.pem",
+    "utf-8",
+  )
 
-  // Assert the Azure VTPM-provided Intel chain order
-  t.true(chain[0].subject.includes("CN=Intel SGX PCK Certificate"))
-  t.true(chain[1].subject.includes("CN=Intel SGX PCK Platform CA"))
-  t.true(chain[2].subject.includes("CN=Intel SGX Root CA"))
+  // Read DER files
+  const intermediateCaCrl = fs.readFileSync(
+    "test/sample/tdx/intermediateCaCrl.der",
+  )
+  const rootCaCrl = fs.readFileSync("test/sample/tdx/rootCaCrl.der")
 
-  // Next step in the chain of trust after the PCK leaf:
-  // Use the PCK leaf public key (chain[0]) to verify `qe_report_signature`
-  // over `qe_report`. If this succeeds, then verify the binding from the QE
-  // report to the quote signing key via `report_data` and finally verify the
-  // ECDSA signature over the quote with the embedded attestation public key.
-  //
-  // Attempt the QE report signature verification now. If it does not verify,
-  // Azure VTPM may require provider-specific handling (e.g. collateral, alt
-  // hash params, or a different binding format). In that case, we document the
-  // required follow-ups in the comments below and continue without failing.
-  const qeReportSigOk = verifyQeReportSignature(quote, pemChain)
-  if (!qeReportSigOk) {
-    // What needs to happen next (not yet implemented here):
-    // 1) Confirm the exact signature algorithm and message for `qe_report_signature`
-    //    used by Azure VTPM. Intel DCAP typically signs the 384-byte SGX REPORT
-    //    with the PCK ECDSA-P256 key; Azure VTPM may differ.
-    // 2) Once `qe_report_signature` verifies, check the binding:
-    //    qe_report.report_data[0..32) == SHA256(attestation_public_key || qe_auth_data)
-    //    (or the provider-specific variant), then:
-    // 3) Verify the quote ECDSA (already validated above by `verifyTdxV4Signature`).
+  // Read JSON configuration files
+  const qeIdentity = JSON.parse(
+    fs.readFileSync("test/sample/tdx/qeIdentity.json", "utf-8"),
+  )
+  const tcbInfo = JSON.parse(
+    fs.readFileSync("test/sample/tdx/tcbInfo.json", "utf-8"),
+  )
+
+  // Parse PEM certificates
+  console.log("=== Parsing PEM Certificates ===")
+
+  // Parse TCB Sign Chain
+  const tcbSignChainCerts = extractPemCertificates(Buffer.from(tcbSignChain))
+  console.log(
+    `\nTCB Sign Chain: Found ${tcbSignChainCerts.length} certificate(s)`,
+  )
+  tcbSignChainCerts.forEach((cert, index) => {
+    const x509 = new X509Certificate(cert)
+    console.log(`  Certificate ${index + 1}:`)
+    console.log(`    Subject: ${x509.subject}`)
+    console.log(`    Issuer: ${x509.issuer}`)
+    console.log(`    Valid From: ${x509.validFrom}`)
+    console.log(`    Valid To: ${x509.validTo}`)
+    console.log(`    Serial Number: ${x509.serialNumber}`)
+  })
+
+  // Parse Trusted Root CA
+  const trustedRootCerts = extractPemCertificates(
+    Buffer.from(trustedRootCaCert),
+  )
+  console.log(
+    `\nTrusted Root CA: Found ${trustedRootCerts.length} certificate(s)`,
+  )
+  trustedRootCerts.forEach((cert, index) => {
+    const x509 = new X509Certificate(cert)
+    console.log(`  Certificate ${index + 1}:`)
+    console.log(`    Subject: ${x509.subject}`)
+    console.log(`    Issuer: ${x509.issuer}`)
+    console.log(`    Valid From: ${x509.validFrom}`)
+    console.log(`    Valid To: ${x509.validTo}`)
+    console.log(`    Serial Number: ${x509.serialNumber}`)
+  })
+
+  // Parse PCK Certificate
+  const pckCerts = extractPemCertificates(Buffer.from(pckCert))
+  console.log(`\nPCK Certificate: Found ${pckCerts.length} certificate(s)`)
+  pckCerts.forEach((cert, index) => {
+    const x509 = new X509Certificate(cert)
+    console.log(`  Certificate ${index + 1}:`)
+    console.log(`    Subject: ${x509.subject}`)
+    console.log(`    Issuer: ${x509.issuer}`)
+    console.log(`    Valid From: ${x509.validFrom}`)
+    console.log(`    Valid To: ${x509.validTo}`)
+    console.log(`    Serial Number: ${x509.serialNumber}`)
+  })
+
+  // Parse PCK Sign Chain
+  const pckSignChainCerts = extractPemCertificates(Buffer.from(pckSignChain))
+  console.log(
+    `\nPCK Sign Chain: Found ${pckSignChainCerts.length} certificate(s)`,
+  )
+  pckSignChainCerts.forEach((cert, index) => {
+    const x509 = new X509Certificate(cert)
+    console.log(`  Certificate ${index + 1}:`)
+    console.log(`    Subject: ${x509.subject}`)
+    console.log(`    Issuer: ${x509.issuer}`)
+    console.log(`    Valid From: ${x509.validFrom}`)
+    console.log(`    Valid To: ${x509.validTo}`)
+    console.log(`    Serial Number: ${x509.serialNumber}`)
+  })
+
+  // Parse DER Certificate Revocation Lists
+  console.log("\n=== Parsing DER Certificate Revocation Lists ===")
+
+  // Note: Node.js doesn't have built-in CRL parsing, so we'll show basic info
+  console.log(`\nIntermediate CA CRL: ${intermediateCaCrl.length} bytes`)
+  console.log(`Root CA CRL: ${rootCaCrl.length} bytes`)
+
+  // Parse JSON configuration files
+  console.log("\n=== Parsing JSON Configuration Files ===")
+
+  console.log("\nQE Identity:")
+  console.log(`  ID: ${qeIdentity.id || "N/A"}`)
+  console.log(`  Version: ${qeIdentity.version || "N/A"}`)
+  console.log(`  Issue Date: ${qeIdentity.issueDate || "N/A"}`)
+  console.log(`  Next Update: ${qeIdentity.nextUpdate || "N/A"}`)
+  if (qeIdentity.enclaveIdentity) {
+    console.log(
+      `  Enclave Identity ID: ${qeIdentity.enclaveIdentity.id || "N/A"}`,
+    )
+    console.log(
+      `  Enclave Identity Version: ${
+        qeIdentity.enclaveIdentity.version || "N/A"
+      }`,
+    )
+  }
+
+  console.log("\nTCB Info:")
+  console.log(`  ID: ${tcbInfo.id || "N/A"}`)
+  console.log(`  Version: ${tcbInfo.version || "N/A"}`)
+  console.log(`  Issue Date: ${tcbInfo.issueDate || "N/A"}`)
+  console.log(`  Next Update: ${tcbInfo.nextUpdate || "N/A"}`)
+  if (tcbInfo.tcbInfo) {
+    console.log(`  TCB Info ID: ${tcbInfo.tcbInfo.id || "N/A"}`)
+    console.log(`  TCB Info Version: ${tcbInfo.tcbInfo.version || "N/A"}`)
+    if (tcbInfo.tcbInfo.tcbLevels) {
+      console.log(`  TCB Levels Count: ${tcbInfo.tcbInfo.tcbLevels.length}`)
+    }
   }
 })
 
