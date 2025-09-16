@@ -111,28 +111,38 @@ export function verifyQeReportSignature(
 
   const key = chain[0].publicKey
 
-  // Strategy A: Verify with DER-encoded ECDSA signature (common case)
-  try {
-    const derSig = encodeEcdsaSignatureToDer(signature.qe_report_signature)
-    const verifierA = createVerify("sha256")
-    verifierA.update(signature.qe_report)
-    verifierA.end()
-    if (verifierA.verify(key, derSig)) return true
-  } catch {}
+  // Some providers may use different hash params for the QE report signature.
+  // Try a small set of common hash algorithms with both DER and IEEE-P1363 encodings.
+  const hashAlgorithms: Array<"sha256" | "sha384" | "sha512"> = [
+    "sha256",
+    "sha384",
+    "sha512",
+  ]
 
-  // Strategy B: Verify using IEEE-P1363 raw (r||s) signature encoding
-  try {
-    const verifierB = createVerify("sha256")
-    verifierB.update(signature.qe_report)
-    verifierB.end()
-    if (
-      verifierB.verify(
-        { key, dsaEncoding: "ieee-p1363" as const },
-        signature.qe_report_signature,
+  for (const algo of hashAlgorithms) {
+    // Strategy A: Verify with DER-encoded ECDSA signature (common case)
+    try {
+      const derSig = encodeEcdsaSignatureToDer(signature.qe_report_signature)
+      const verifierA = createVerify(algo)
+      verifierA.update(signature.qe_report)
+      verifierA.end()
+      if (verifierA.verify(key, derSig)) return true
+    } catch {}
+
+    // Strategy B: Verify using IEEE-P1363 raw (r||s) signature encoding
+    try {
+      const verifierB = createVerify(algo)
+      verifierB.update(signature.qe_report)
+      verifierB.end()
+      if (
+        verifierB.verify(
+          { key, dsaEncoding: "ieee-p1363" as const },
+          signature.qe_report_signature,
+        )
       )
-    )
-      return true
-  } catch {}
+        return true
+    } catch {}
+  }
 
   return false
 }
