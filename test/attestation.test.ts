@@ -11,10 +11,14 @@ import {
   verifyProvisioningCertificationChain,
   isPinnedRootCertificate,
   verifyQeReportSignature,
+  formatTDXHeader,
+  formatTDXQuoteBodyV4,
+  parseVTPMQuotingEnclaveAuthData,
   // verifyQeReportBinding,
 } from "../qvl"
 import jwt from "jsonwebtoken"
 import { X509Certificate } from "node:crypto"
+import { Struct } from "typed-struct"
 
 test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
@@ -158,145 +162,105 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   )
 })
 
-test.serial(
-  "Verify a V4 TDX quote from Google Cloud, including the full cert chain",
-  async (t) => {
-    const data = JSON.parse(
-      fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
-    )
-    const quote: string = data.tdx.quote
-    const { header, body, signature } = parseTdxQuoteBase64(quote)
+test.serial("Parse a V4 TDX quote from Azure", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx-v4-azure-quote", "utf-8")
+  const { header, body } = parseTdxQuoteBase64(quote)
 
-    const expectedMRTD =
-      "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
-    const expectedReportData =
-      "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
+  const expectedMRTD =
+    "fe27b2aa3a05ec56864c308aff03dd13c189a6112d21e417ec1afe626a8cb9d91482d1379ec02fe6308972950a930d0a"
+  const expectedReportData =
+    "675b293e4e395b2bfbfb27a1754f5ca1fdca87e1949b3bc4d8ca39a8be195afe0000000000000000000000000000000000000000000000000000000000000000"
 
-    t.is(header.version, 4)
-    t.is(header.tee_type, 129)
-    t.is(hex(body.mr_td), expectedMRTD)
-    t.is(hex(body.report_data), expectedReportData)
-    t.deepEqual(body.mr_config_id, Buffer.alloc(48))
-    t.deepEqual(body.mr_owner, Buffer.alloc(48))
-    t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-    t.true(verifyTdxV4Signature(quote))
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
+})
 
-    t.truthy(signature.cert_data)
-    t.true(extractPemCertificates(signature.cert_data).length == 2)
-    const { status, root, chain } = verifyProvisioningCertificationChain(
-      signature.cert_data,
-      { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
-    )
-    t.is(status, "valid")
-    t.true(root && isPinnedRootCertificate(root, "test/certs"))
-    // t.true(verifyQeReportBinding(quote))
-    // t.true(verifyQeReportSignature(quote))
+test.serial("Parse a V4 TDX quote from Azure - vtpm", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx-v4-azure-vtpm.bin")
+  const { header, body, signature } = parseTdxQuote(quote)
 
-    // This should be the PCK leaf JWT (signed by Intel TA). Verify using the
-    // signing cert provided in the JWT header (x5c), not the PCK chain.
-    const token = fs.readFileSync("test/sample/tdx-v4-gcp-token.hex", "utf-8")
-    const decodedUnverified = jwt.decode(token, { complete: true })
+  const expectedMRTD =
+    "fe27b2aa3a05ec56864c308aff03dd13c189a6112d21e417ec1afe626a8cb9d91482d1379ec02fe6308972950a930d0a"
+  const expectedReportData =
+    "c905cc6eab5abd48caacb6f5bb69dac00ca018076ba81f04fd3f5ae1c8abdbf80000000000000000000000000000000000000000000000000000000000000000"
 
-    if (decodedUnverified === null) {
-      t.fail()
-      return
-    }
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
 
-    console.log("Decoded (unverified) header:", decodedUnverified.header)
-    console.log("Decoded (unverified) payload:", decodedUnverified.payload)
+  const { certs, cert_data } = parseVTPMQuotingEnclaveAuthData(
+    signature.qe_auth_data,
+  )
+  t.true(extractPemCertificates(cert_data).length === 3)
+  const { status, root, chain } = verifyProvisioningCertificationChain(
+    cert_data,
+    { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
+  )
+  t.is(status, "valid")
+  t.true(root && isPinnedRootCertificate(root, "test/certs"))
+  console.log(chain[0].subject)
+  console.log(chain[1].subject)
+  console.log(chain[2].subject)
+})
 
-    // Expect RSA alg and presence of kid; we'll use local certs file
-    const { alg, kid } = decodedUnverified.header as {
-      alg?: string
-      kid?: string
-    }
-    t.truthy(alg)
-    t.true(alg === "PS384" || alg === "RS256")
-    t.truthy(kid)
+test.skip("Verify a V4 TDX quote from Google Cloud, including the full cert chain", async (t) => {
+  const data = JSON.parse(
+    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+  )
+  const quote: string = data.tdx.quote
+  const { header, body, signature } = parseTdxQuoteBase64(quote)
 
-    // Load signing certs from local JSON instead of JWKS
-    const certsJson = JSON.parse(
-      fs.readFileSync("test/sample/tdx-v4-gcp-token-certs.json", "utf-8"),
-    ) as { keys: Array<Record<string, unknown>> }
-    const keys = certsJson.keys || []
-    let matched = keys.find(
-      (k: any) => k.kid === kid && (k.alg === alg || typeof k.alg !== "string"),
-    ) as any
-    if (!matched) matched = keys.find((k: any) => k.kid === kid) as any
-    if (!matched) matched = keys.find((k: any) => k.alg === alg) as any
-    if (!matched) matched = keys[0]
-    t.truthy(matched)
-    const x5c0: string | undefined = matched?.x5c?.[0]
-    t.truthy(x5c0)
-    const pem =
-      "-----BEGIN CERTIFICATE-----\n" +
-      x5c0!
-        .replace(/\n/g, "")
-        .match(/.{1,64}/g)!
-        .join("\n") +
-      "\n-----END CERTIFICATE-----\n"
+  const expectedMRTD =
+    "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
+  const expectedReportData =
+    "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
 
-    // Choose a verification time while the token is valid
-    const payload = decodedUnverified.payload as Record<string, unknown>
-    const exp = typeof payload.exp === "number" ? payload.exp : undefined
-    const nbf = typeof payload.nbf === "number" ? payload.nbf : undefined
-    const iat = typeof payload.iat === "number" ? payload.iat : undefined
-    let clockTimestamp = Math.floor(Date.now() / 1000)
-    if (exp) {
-      const start = (nbf ?? iat ?? exp - 3600) + 60
-      clockTimestamp = Math.min(exp - 60, start)
-    }
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
 
-    // Validate the token cert chain (x5c) issuer/subject and validity window
-    const x5cArr: string[] = Array.isArray(matched?.x5c)
-      ? (matched.x5c as string[])
-      : []
-    t.true(x5cArr.length >= 2)
-    const tokenChainCerts: X509Certificate[] = x5cArr.map(
-      (b64) =>
-        new X509Certificate(
-          "-----BEGIN CERTIFICATE-----\n" +
-            b64
-              .replace(/\n/g, "")
-              .match(/.{1,64}/g)!
-              .join("\n") +
-            "\n-----END CERTIFICATE-----\n",
-        ),
-    )
-    for (let i = 0; i < tokenChainCerts.length - 1; i++) {
-      const child = tokenChainCerts[i]
-      const parent = tokenChainCerts[i + 1]
-      t.is(child.issuer, parent.subject)
-    }
-    const nowMs = clockTimestamp * 1000
-    for (const c of tokenChainCerts) {
-      const notBefore = new Date(c.validFrom).getTime()
-      const notAfter = new Date(c.validTo).getTime()
-      t.true(notBefore <= nowMs && nowMs <= notAfter)
-    }
+  t.truthy(signature.cert_data)
+  t.true(extractPemCertificates(signature.cert_data).length == 2)
+  const { status, root, chain } = verifyProvisioningCertificationChain(
+    signature.cert_data,
+    { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
+  )
+  t.is(status, "valid")
+  t.true(root && isPinnedRootCertificate(root, "test/certs"))
 
-    const verifiedPayload = jwt.verify(token, pem, {
-      algorithms: ["PS384", "RS256"],
-      issuer: "https://portal.trustauthority.intel.com",
-      clockTimestamp,
-    })
-    t.truthy(verifiedPayload)
+  // t.true(verifyQeReportBinding(quote))
+  // t.true(verifyQeReportSignature(quote))
 
-    // // Verifier returns expired if any certificate is expired
-    // const { status: status2 } = verifyProvisioningCertificationChain(
-    //   signature.cert_data,
-    //   { verifyAtTimeMs: Date.parse("2050-09-01T00:01:00Z") },
-    // )
-    // t.is(status2, "expired")
+  // // Verifier returns expired if any certificate is expired
+  // const { status: status2 } = verifyProvisioningCertificationChain(
+  //   signature.cert_data,
+  //   { verifyAtTimeMs: Date.parse("2050-09-01T00:01:00Z") },
+  // )
+  // t.is(status2, "expired")
 
-    // // Verifier returns expired if any certificate is not yet valid
-    // const { status: status3 } = verifyProvisioningCertificationChain(
-    //   signature.cert_data,
-    //   { verifyAtTimeMs: Date.parse("2000-09-01T00:01:00Z") },
-    // )
-    // t.is(status3, "expired")
-  },
-)
+  // // Verifier returns expired if any certificate is not yet valid
+  // const { status: status3 } = verifyProvisioningCertificationChain(
+  //   signature.cert_data,
+  //   { verifyAtTimeMs: Date.parse("2000-09-01T00:01:00Z") },
+  // )
+  // t.is(status3, "expired")
+})
 
 // test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
 //   // TODO

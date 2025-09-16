@@ -1,10 +1,4 @@
-import {
-  createHash,
-  createPublicKey,
-  createVerify,
-  verify as cryptoVerify,
-  X509Certificate,
-} from "node:crypto"
+import { createPublicKey, createVerify, X509Certificate } from "node:crypto"
 
 import { getTdxV4SignedRegion, parseTdxQuote } from "./structs.js"
 import {
@@ -192,7 +186,7 @@ export function verifyQeReportSignature(quote: string | Buffer): boolean {
 //   const first = reportData.subarray(0, 32)
 //   const second = reportData.subarray(32, 64)
 //   return candidates.some((c) => c.equals(first) || c.equals(second))
-// }
+// }}
 
 /**
  * Verify the ECDSA-P256 signature inside a TDX v4 quote against the embedded
