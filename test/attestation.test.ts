@@ -277,7 +277,7 @@ test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
   )
 
   // Merge pinned roots (if any) into the certificate pool to complete the chain
-  const pinnedRoots = loadRootCerts("test/certs")
+  const pinnedRoots = loadRootCerts("certs")
   const pinnedRootPems = pinnedRoots.map((c) => derToPem(c.raw))
 
   const { status, root, chain } = verifyProvisioningCertificationChain(
@@ -289,9 +289,9 @@ test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
 
   // Optionally validate against pinned roots if they exist locally
   if (root) {
-    const pinned = loadRootCerts("test/certs")
+    const pinned = loadRootCerts("certs")
     if (pinned.length > 0) {
-      t.true(isPinnedRootCertificate(root, "test/certs"))
+      t.true(isPinnedRootCertificate(root, "certs"))
     }
   }
 
