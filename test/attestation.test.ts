@@ -8,57 +8,12 @@ import {
   reverseHexBytes,
   verifyTdxV4Signature,
   extractPemCertificates,
-  verifyProvisioningCertificationChain,
+  verifyPCKChain,
   isPinnedRootCertificate,
   verifyQeReportSignature,
   verifyQeReportBinding,
   loadRootCerts,
 } from "../qvl"
-import { X509Certificate } from "node:crypto"
-
-function splitDerCertificates(buf: Buffer): Buffer[] {
-  const results: Buffer[] = []
-  let offset = 0
-  while (offset + 4 <= buf.length) {
-    if (buf[offset] !== 0x30) {
-      offset++
-      continue
-    }
-    const lenByte = buf[offset + 1]
-    let totalLen = 0
-    let headerLen = 0
-    if (lenByte < 0x80) {
-      totalLen = 2 + lenByte
-      headerLen = 2
-    } else {
-      const numLenBytes = lenByte & 0x7f
-      if (offset + 2 + numLenBytes > buf.length) break
-      let len = 0
-      for (let i = 0; i < numLenBytes; i++) {
-        len = (len << 8) | buf[offset + 2 + i]
-      }
-      totalLen = 2 + numLenBytes + len
-      headerLen = 2 + numLenBytes
-    }
-    if (totalLen <= 0 || offset + totalLen > buf.length) {
-      offset++
-      continue
-    }
-    const candidate = buf.subarray(offset, offset + totalLen)
-    try {
-      // Validate by attempting to construct an X509Certificate
-      // If it throws, this slice isn't a cert
-      new X509Certificate(candidate)
-      results.push(candidate)
-      offset += totalLen
-      continue
-    } catch {
-      // Not a cert, move forward
-      offset += 1
-    }
-  }
-  return results
-}
 
 function derToPem(der: Buffer): string {
   const b64 = der.toString("base64")
@@ -253,9 +208,9 @@ test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
   const pinnedRootPems = pinnedRoots.map((c) => derToPem(c.raw))
 
   const leaf = fs.readFileSync("test/sample/tdx/pckCert.pem", "utf-8")
-  const { status, root, chain } = verifyProvisioningCertificationChain(
+  const { status, root, chain } = verifyPCKChain(
     [leaf, ...pinnedRootPems],
-    { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
+    Date.parse("2025-09-01"),
   )
   t.is(status, "valid")
   t.truthy(root)
@@ -297,26 +252,17 @@ test.serial(
 
     const certs = extractPemCertificates(signature.cert_data)
     t.true(certs.length == 3)
-    const { status, root, chain } = verifyProvisioningCertificationChain(
-      certs,
-      { verifyAtTimeMs: Date.parse("2025-09-01T00:01:00Z") },
-    )
+    const { status, root } = verifyPCKChain(certs, Date.parse("2025-09-01"))
     t.is(status, "valid")
     t.true(root && isPinnedRootCertificate(root, "test/certs"))
 
     t.true(verifyQeReportBinding(quote))
     t.true(verifyQeReportSignature(quote))
 
-    // Verifier returns expired if any certificate is expired
-    const { status: status2 } = verifyProvisioningCertificationChain(certs, {
-      verifyAtTimeMs: Date.parse("2050-09-01T00:01:00Z"),
-    })
+    // Verifier returns expired if any certificate is expired or not yet valid
+    const { status: status2 } = verifyPCKChain(certs, Date.parse("2050-09-01"))
     t.is(status2, "expired")
-
-    // Verifier returns expired if any certificate is not yet valid
-    const { status: status3 } = verifyProvisioningCertificationChain(certs, {
-      verifyAtTimeMs: Date.parse("2000-09-01T00:01:00Z"),
-    })
+    const { status: status3 } = verifyPCKChain(certs, Date.parse("2000-09-01"))
     t.is(status3, "expired")
   },
 )

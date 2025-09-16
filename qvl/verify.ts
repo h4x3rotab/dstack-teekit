@@ -30,14 +30,14 @@ export function isPinnedRootCertificate(
 }
 
 /**
- * Validate a PCK certificate chain embedded in cert_data.
+ * Validate a provisioning certificate chain embedded in cert_data.
  * - Identifies the leaf certificate and walks up the chain, following issuer/subject chaining.
  * - Expects at least two certificates.
  * - Checks the validity window of each certificate.
  */
-export function verifyProvisioningCertificationChain(
+export function verifyPCKChain(
   certData: string[],
-  { verifyAtTimeMs }: { verifyAtTimeMs: number },
+  verifyAtTimeMs: number,
 ): {
   status: "valid" | "invalid" | "expired"
   root: X509Certificate | null
@@ -114,14 +114,11 @@ export function verifyQeReportSignature(
   }
   if (certs.length === 0) return false
 
-  const { chain } = verifyProvisioningCertificationChain(certs, {
-    // We only need a syntactically valid chain to obtain the PCK leaf public key
-    // for verifying the QE report signature. Use current time for basic validity.
-    verifyAtTimeMs: Date.now(),
-  })
+  // Use Date.now() because we don't care if valid is returned as "expired" here
+  const { chain } = verifyPCKChain(certs, Date.now())
+
   if (chain.length === 0) return false
 
-  // Use the PCK leaf certificate (first in chain) - this is the standard approach
   const pckLeafCert = chain[0]
   const pckLeafKey = pckLeafCert.publicKey
 
