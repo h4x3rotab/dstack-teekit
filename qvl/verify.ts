@@ -40,6 +40,13 @@ const DEFAULT_PINNED_ROOT_CERTS: X509Certificate[] = [
  * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
  */
 export function verifyTdx(quote: Buffer, config?: VerifyTdxConfig) {
+  if (
+    config !== undefined &&
+    (typeof config !== "object" || Array.isArray(config))
+  ) {
+    throw new Error("verifyTdx: invalid config argument provided")
+  }
+
   const pinnedRootCerts = config?.pinnedRootCerts ?? DEFAULT_PINNED_ROOT_CERTS
   const date = config?.date
   const extraCertdata = config?.extraCertdata

@@ -370,35 +370,6 @@ function rebuildQuoteWithCertData(baseQuote: Buffer, certData: Buffer): Buffer {
   return Buffer.concat([prefix, newSigLen, newSigData])
 }
 
-function rebuildQuoteWithCertType(
-  baseQuote: Buffer,
-  certDataType: number,
-): Buffer {
-  const signedLen = getTdxV4SignedRegion(baseQuote).length
-  const sigLen = baseQuote.readUInt32LE(signedLen)
-  const sigStart = signedLen + 4
-  const sigData = baseQuote.subarray(sigStart, sigStart + sigLen)
-
-  const FIXED_LEN = 64 + 64 + 6 + 384 + 64 + 2 // ECDSA fixed portion
-  const qeAuthLen = sigData.readUInt16LE(64 + 64 + 6 + 384 + 64)
-  const fixedPlusAuth = sigData.subarray(0, FIXED_LEN + qeAuthLen)
-
-  // Extract existing cert_data tail
-  const certDataOffset = FIXED_LEN + qeAuthLen + 2 + 4
-  const existingCertData = sigData.subarray(certDataOffset)
-
-  const tail = Buffer.alloc(2 + 4)
-  tail.writeUInt16LE(certDataType, 0)
-  tail.writeUInt32LE(existingCertData.length, 2)
-
-  const newSigData = Buffer.concat([fixedPlusAuth, tail, existingCertData])
-  const newSigLen = Buffer.alloc(4)
-  newSigLen.writeUInt32LE(newSigData.length, 0)
-
-  const prefix = baseQuote.subarray(0, signedLen)
-  return Buffer.concat([prefix, newSigLen, newSigData])
-}
-
 function getGcpQuoteBase64(): string {
   const data = JSON.parse(
     fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
@@ -763,17 +734,60 @@ test.serial(
 test.serial("Reject a V4 TDX quote, unsupported cert_data_type", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
-  const mutated = rebuildQuoteWithCertType(original, 0)
-  const err = t.throws(() =>
-    verifyTdx(mutated, {
-      pinnedRootCerts: loadRootCerts("test/certs"),
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  const signedLen = getTdxV4SignedRegion(original).length
+  const sigLen = original.readUInt32LE(signedLen)
+  const sigStart = signedLen + 4
+  const sigData = Buffer.from(original.subarray(sigStart, sigStart + sigLen))
+
+  const fixedOffset = 64 + 64 + 6 + 384 + 64
+  const qeAuthLen = sigData.readUInt16LE(fixedOffset)
+  const tailOffset = fixedOffset + 2 + qeAuthLen
+  // Overwrite cert_data_type (UInt16LE) with an unsupported value
+  sigData.writeUInt16LE(1, tailOffset)
+
+  const mutated = Buffer.concat([
+    original.subarray(0, signedLen),
+    Buffer.from(
+      new Uint8Array([
+        sigData.length & 0xff,
+        (sigData.length >> 8) & 0xff,
+        (sigData.length >> 16) & 0xff,
+        (sigData.length >> 24) & 0xff,
+      ]),
+    ),
+    sigData,
+  ])
+
+  const err = t.throws(() => verifyTdx(mutated, { date: BASE_TIME, crls: [] }))
   t.truthy(err)
   t.regex(err!.message, /only PCK cert_data is supported/i)
 })
+
+test.serial(
+  "Reject a V4 TDX quote, cert chain not yet valid (too early)",
+  async (t) => {
+    const quoteB64 = getGcpQuoteBase64()
+    const early = Date.parse("2000-01-01")
+    const err = t.throws(() =>
+      verifyTdxBase64(quoteB64, { date: early, crls: [] }),
+    )
+    t.truthy(err)
+    t.regex(err!.message, /expired cert chain, or not yet valid/i)
+  },
+)
+
+test.serial(
+  "Reject a V4 TDX quote, cert chain expired (too late)",
+  async (t) => {
+    const quoteB64 = getGcpQuoteBase64()
+    const late = Date.parse("2100-01-01")
+    const err = t.throws(() =>
+      verifyTdxBase64(quoteB64, { date: late, crls: [] }),
+    )
+    t.truthy(err)
+    t.regex(err!.message, /expired cert chain, or not yet valid/i)
+  },
+)
 
 test.serial("Reject a TDX quote with unsupported version", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
