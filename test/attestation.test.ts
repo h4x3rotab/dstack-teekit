@@ -15,7 +15,7 @@ import {
 } from "../qvl"
 import { X509Certificate } from "node:crypto"
 
-test.serial("Parse a V4 TDX quote from Tappd", async (t) => {
+test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
@@ -42,7 +42,7 @@ test.serial("Parse a V4 TDX quote from Tappd", async (t) => {
   )
 })
 
-test.serial("Parse a V4 TDX quote from Edgeless", async (t) => {
+test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-edgeless.bin")
 
   const { header, body } = parseTdxQuote(quote)
@@ -68,7 +68,7 @@ test.serial("Parse a V4 TDX quote from Edgeless", async (t) => {
   )
 })
 
-test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
+test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-phala.bin")
 
   const { header, body } = parseTdxQuote(quote)
@@ -94,7 +94,7 @@ test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   )
 })
 
-test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
+test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-phala.hex", "utf-8")
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
@@ -121,7 +121,7 @@ test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   )
 })
 
-test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
+test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.bin")
 
   const { header, body } = parseTdxQuote(quote)
@@ -149,7 +149,7 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   )
 })
 
-test.serial("Parse a V4 TDX quote from Azure", async (t) => {
+test.serial("Verify a V4 TDX quote from Azure", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-azure-quote", "utf-8")
   const { header, body } = parseTdxQuoteBase64(quote)
 
@@ -175,7 +175,7 @@ test.serial("Parse a V4 TDX quote from Azure", async (t) => {
   )
 })
 
-test.serial("Parse a V4 TDX quote from Trustee", async (t) => {
+test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-trustee.dat")
   const { header, body } = parseTdxQuote(quote)
 
@@ -231,7 +231,7 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
   t.true(verifyTdxCertChain(quote, root, Date.parse("2025-09-01"), certdata))
 })
 
-test.serial("Parse a V4 TDX quote from GCP", async (t) => {
+test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   const data = JSON.parse(
     fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
   )
@@ -274,14 +274,14 @@ test.serial("Return expired if certificate is not yet valid", async (t) => {
   t.is(status3, "expired")
 })
 
-// test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
+// test.skip("Verify a V5 TDX 1.0 attestation", async (t) => {
 //   // TODO
 // })
 
-// test.skip("Parse a V5 TDX 1.5 attestation", async (t) => {
+// test.skip("Verify a V5 TDX 1.5 attestation", async (t) => {
 //   // TODO
 // })
 
-// test.skip("Parse an SGX attestation", async (t) => {
+// test.skip("Verify an SGX attestation", async (t) => {
 //   // TODO
 // })
