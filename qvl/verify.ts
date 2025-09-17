@@ -16,7 +16,8 @@ import {
   getTdx15SignedRegion,
   parseTdxQuote,
   TdxQuoteV5Descriptor,
-  TdxQuoteHeader,
+  QuoteHeader,
+  parseSgxQuote,
 } from "./structs.js"
 import {
   computeCertSha256Hex,
@@ -29,7 +30,7 @@ import {
 } from "./utils.js"
 import { intelSgxRootCaPem } from "./rootCa.js"
 
-export interface VerifyTdxConfig {
+export interface VerifyConfig {
   crls: Buffer[]
   pinnedRootCerts?: X509Certificate[]
   date?: number
@@ -40,13 +41,25 @@ const DEFAULT_PINNED_ROOT_CERTS: X509Certificate[] = [
   new X509Certificate(intelSgxRootCaPem),
 ]
 
+export function verifySgx(quote: Buffer, config?: VerifyConfig) {
+  if (
+    config !== undefined &&
+    (typeof config !== "object" || Array.isArray(config))
+  ) {
+    throw new Error("verifySgx: invalid config argument provided")
+  }
+  parseSgxQuote(quote)
+
+  throw new Error("unimplemented")
+}
+
 /**
  * Verify a complete chain of trust for a TDX enclave, including the
  * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
  *
  * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
  */
-export function verifyTdx(quote: Buffer, config?: VerifyTdxConfig) {
+export function verifyTdx(quote: Buffer, config?: VerifyConfig) {
   if (
     config !== undefined &&
     (typeof config !== "object" || Array.isArray(config))
@@ -114,7 +127,7 @@ export function verifyTdx(quote: Buffer, config?: VerifyTdxConfig) {
   return true
 }
 
-export function verifyTdxBase64(quote: string, config?: VerifyTdxConfig) {
+export function verifyTdxBase64(quote: string, config?: VerifyConfig) {
   return verifyTdx(Buffer.from(quote, "base64"), config)
 }
 

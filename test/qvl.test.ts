@@ -13,6 +13,8 @@ import {
   loadRootCerts,
   getTdx10SignedRegion,
   computeCertSha256Hex,
+  verifySgx,
+  parseSgxQuote,
 } from "../qvl"
 import { X509Certificate } from "node:crypto"
 
@@ -297,9 +299,50 @@ test.serial("Verify a V5 TDX quote from Trustee", async (t) => {
   )
 })
 
-// test.skip("Verify an SGX attestation", async (t) => {
-//   // TODO
-// })
+test.serial("Verify an SGX quote from Intel", async (t) => {
+  const quote = fs.readFileSync("test/sample/sgx/quote.dat")
+  const { header, body } = parseSgxQuote(quote)
+
+  const expectedMrEnclave =
+    "0000000000000000000000000000000000000000000000000000000000000000"
+  const expectedReportData =
+    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
+  t.is(header.version, 3)
+  t.is(header.tee_type, 0)
+  t.is(hex(body.mr_enclave), expectedMrEnclave)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_signer, Buffer.alloc(32))
+  t.deepEqual(body.attributes, Buffer.alloc(16))
+  t.deepEqual(body.cpu_svn, Buffer.alloc(16))
+
+  // Intel sample is missing certdata, reconstruct it from provided PEM files instead
+  const root = extractPemCertificates(
+    fs.readFileSync("test/sample/sgx/trustedRootCaCert.pem"),
+  )
+  const pckChain = extractPemCertificates(
+    fs.readFileSync("test/sample/sgx/pckSignChain.pem"),
+  )
+  const pckCert = extractPemCertificates(
+    fs.readFileSync("test/sample/sgx/pckCert.pem"),
+  )
+  const certdata = [...root, ...pckChain, ...pckCert]
+
+  // Use provided certificate revocation lists
+  const crls = [
+    fs.readFileSync("test/sample/sgx/rootCaCrl.der"),
+    fs.readFileSync("test/sample/sgx/intermediateCaCrl.der"),
+  ]
+
+  t.true(
+    verifySgx(quote, {
+      pinnedRootCerts: [new X509Certificate(root[0])],
+      date: BASE_TIME,
+      crls,
+      extraCertdata: certdata,
+    }),
+  )
+})
 
 // ---------------------- Negative tests for invalid scenarios ----------------------
 

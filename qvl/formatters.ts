@@ -1,5 +1,5 @@
 import {
-  TdxQuoteHeader,
+  QuoteHeader,
   TdxQuoteBody_1_0,
   TdxQuoteBody_1_5,
   TdxSignature,
@@ -7,7 +7,7 @@ import {
 import { ExtractType } from "typed-struct"
 import { hex } from "./utils.js"
 
-export const formatTDXHeader = (header: ExtractType<typeof TdxQuoteHeader>) => {
+export const formatTDXHeader = (header: ExtractType<typeof QuoteHeader>) => {
   return {
     version: header.version,
     att_key_type: header.att_key_type,
