@@ -25,18 +25,17 @@ export function verifyTdxCertChain(
   date?: number,
   extraCerts?: string[],
 ) {
-  const { signature } = parseTdxQuote(quote)
+  const { signature, header } = parseTdxQuote(quote)
   const certs = extractPemCertificates(signature.cert_data)
-  let { status, root, chain } = verifyPCKChain(certs, date || +new Date())
+  let { status, root } = verifyPCKChain(certs, date || +new Date())
 
   if (!root && certs.length === 0) {
     if (!extraCerts) {
       throw new Error("verifyTdxCertChain: missing certdata")
     }
-    const fallback = verifyPCKChain(extraCerts, Date.parse("2025-09-01"))
+    const fallback = verifyPCKChain(extraCerts, date || +new Date())
     status = fallback.status
     root = fallback.root
-    chain = fallback.chain
   }
   if (!root) {
     throw new Error("verifyTdxCertChain: invalid cert chain")
@@ -46,6 +45,18 @@ export function verifyTdxCertChain(
   const knownRootHashes = new Set(pinnedRootCerts.map(computeCertSha256Hex))
   const rootIsValid = knownRootHashes.has(candidateRootHash)
 
+  if (header.tee_type !== 129) {
+    throw new Error("verifyTdxCertChain: only tdx is supported")
+  }
+  if (header.att_key_type !== 2) {
+    throw new Error("verifyTdxCertChain: only ECDSA att_key_type is supported")
+  }
+  if (signature.cert_data_type !== 5) {
+    throw new Error("verifyTdxCertChain: only PCK cert_data is supported")
+  }
+  if (status === "expired") {
+    throw new Error("verifyTdxCertChain: expired cert chain, or not yet valid")
+  }
   if (status !== "valid") {
     throw new Error("verifyTdxCertChain: invalid cert chain")
   }
@@ -57,6 +68,11 @@ export function verifyTdxCertChain(
   }
   if (!verifyQeReportSignature(quote, extraCerts)) {
     throw new Error("verifyTdxCertChain: invalid qe report signature")
+  }
+  if (!verifyTdxV4Signature(quote)) {
+    throw new Error(
+      "verifyTdxCertChain: invalid attestation_public_key signature",
+    )
   }
 
   return true
@@ -128,6 +144,31 @@ export function verifyPCKChain(
     const notAfter = new Date(c.validTo).getTime()
     if (!(notBefore <= verifyAtTimeMs && verifyAtTimeMs <= notAfter)) {
       return { status: "expired", root: chain[chain.length - 1] ?? null, chain }
+    }
+  }
+
+  // Cryptographically verify signatures along the chain: each child signed by its parent
+  for (let i = 0; i < chain.length - 1; i++) {
+    const child = chain[i]
+    const parent = chain[i + 1]
+    try {
+      if (!child.verify(parent.publicKey)) {
+        return { status: "invalid", root: null, chain: [] }
+      }
+    } catch {
+      return { status: "invalid", root: null, chain: [] }
+    }
+  }
+
+  // If the terminal certificate is self-signed, verify its signature as well
+  const terminal = chain[chain.length - 1]
+  if (terminal && terminal.subject === terminal.issuer) {
+    try {
+      if (!terminal.verify(terminal.publicKey)) {
+        return { status: "invalid", root: null, chain: [] }
+      }
+    } catch {
+      return { status: "invalid", root: null, chain: [] }
     }
   }
 

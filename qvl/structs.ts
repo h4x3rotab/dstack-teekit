@@ -133,20 +133,3 @@ export function parseTdxQuote(quote_data: Buffer) {
 export function parseTdxQuoteBase64(quote: string) {
   return parseTdxQuote(Buffer.from(quote, "base64"))
 }
-
-export function parseVTPMQuotingEnclaveAuthData(auth_data: Buffer) {
-  const AuthData = new Struct("VTPM_QEAuthdata")
-    .Buffer("meta", 36)
-    .UInt32LE("cert_data_type")
-    .UInt32LE("cert_data_len")
-    .Buffer("certs")
-    .compile()
-  const { meta, certs, cert_data_type, cert_data_len } = new AuthData(auth_data)
-  return {
-    meta,
-    cert_data_type,
-    cert_data_len,
-    cert_data: certs.slice(0, cert_data_len),
-    certs: certs.slice(0, cert_data_len).toString(),
-  }
-}
