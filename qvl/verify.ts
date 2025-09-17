@@ -10,27 +10,74 @@ import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,
   extractPemCertificates,
-  loadRootCerts,
   toBase64Url,
 } from "./utils.js"
 
 /**
- * Validate a candidate root certificate is one of our pinned
- * Intel SGX root certificates, by comparing their SHA-256 hash.
+ * Verify a complete certificate chain for a TDX enclave, including the
+ * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
+ *
+ * Optional: accepts `extraCerts`, which is used if `quote` is missing certdata.
  */
-export function isPinnedRootCertificate(
-  candidateRoot: X509Certificate,
-  certsDirectory: string,
-): boolean {
-  const knownRoots = loadRootCerts(certsDirectory)
-  if (knownRoots.length === 0) return false
-  const candidateHash = computeCertSha256Hex(candidateRoot)
-  const knownHashes = new Set(knownRoots.map(computeCertSha256Hex))
-  return knownHashes.has(candidateHash)
+export function verifyTdxCertChain(
+  quote: Buffer,
+  pinnedRootCerts: X509Certificate[],
+  date?: number,
+  extraCerts?: string[],
+) {
+  const { signature } = parseTdxQuote(quote)
+  const certs = extractPemCertificates(signature.cert_data)
+  let { status, root, chain } = verifyPCKChain(certs, date || +new Date())
+
+  if (!root && certs.length === 0) {
+    if (!extraCerts) {
+      throw new Error("verifyTdxCertChain: missing certdata")
+    }
+    const fallback = verifyPCKChain(extraCerts, Date.parse("2025-09-01"))
+    status = fallback.status
+    root = fallback.root
+    chain = fallback.chain
+  }
+  if (!root) {
+    throw new Error("verifyTdxCertChain: invalid cert chain")
+  }
+
+  const candidateRootHash = computeCertSha256Hex(root)
+  const knownRootHashes = new Set(pinnedRootCerts.map(computeCertSha256Hex))
+  const rootIsValid = knownRootHashes.has(candidateRootHash)
+
+  if (status !== "valid") {
+    throw new Error("verifyTdxCertChain: invalid cert chain")
+  }
+  if (!rootIsValid) {
+    throw new Error("verifyTdxCertChain: invalid root")
+  }
+  if (!verifyQeReportBinding(quote)) {
+    throw new Error("verifyTdxCertChain: invalid qe report binding")
+  }
+  if (!verifyQeReportSignature(quote, extraCerts)) {
+    throw new Error("verifyTdxCertChain: invalid qe report signature")
+  }
+
+  return true
+}
+
+export function verifyTdxCertChainBase64(
+  quote: string,
+  pinnedRootCerts: X509Certificate[],
+  date?: number,
+  extraCerts?: string[],
+) {
+  return verifyTdxCertChain(
+    Buffer.from(quote, "base64"),
+    pinnedRootCerts,
+    date,
+    extraCerts,
+  )
 }
 
 /**
- * Validate a provisioning certificate chain embedded in cert_data.
+ * Verify a PCK provisioning certificate chain embedded in cert_data.
  * - Identifies the leaf certificate and walks up the chain, following issuer/subject chaining.
  * - Expects at least two certificates.
  * - Checks the validity window of each certificate.
@@ -93,7 +140,7 @@ export function verifyPCKChain(
  */
 export function verifyQeReportSignature(
   quoteInput: string | Buffer,
-  certsInput?: string[],
+  extraCerts?: string[],
 ): boolean {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
@@ -107,10 +154,10 @@ export function verifyQeReportSignature(
     return false
   }
 
-  // Prefer explicitly provided certs; otherwise try to extract from cert_data in the quote
-  let certs: string[] = Array.isArray(certsInput) ? certsInput : []
-  if (certs.length === 0 && signature.cert_data) {
-    certs = extractPemCertificates(signature.cert_data)
+  // Prefer certdata; otherwise use extraCerts
+  let certs: string[] = extractPemCertificates(signature.cert_data)
+  if (certs.length === 0) {
+    certs = extraCerts ?? []
   }
   if (certs.length === 0) return false
 
@@ -200,6 +247,8 @@ export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
   // Some ecosystem implementations have placed the digest starting at a non-zero offset
   // within report_data. As a pragmatic fallback, look for any candidate digest as a
   // contiguous 32-byte subsequence anywhere within the 64-byte report_data field.
+  //
+  // In particular, we see an offset of "6" in a few examples (TODO)
   for (const digest of candidates) {
     if (reportData.indexOf(digest) !== -1) {
       return true

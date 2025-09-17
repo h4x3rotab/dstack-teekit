@@ -9,27 +9,17 @@ import {
   verifyTdxV4Signature,
   extractPemCertificates,
   verifyPCKChain,
-  isPinnedRootCertificate,
-  verifyQeReportSignature,
-  verifyQeReportBinding,
+  verifyTdxCertChain,
+  verifyTdxCertChainBase64,
   loadRootCerts,
 } from "../qvl"
+import { X509Certificate } from "node:crypto"
 
-function derToPem(der: Buffer): string {
-  const b64 = der.toString("base64")
-  const lines = b64.match(/.{1,64}/g) || []
-  return [
-    "-----BEGIN CERTIFICATE-----",
-    ...lines,
-    "-----END CERTIFICATE-----",
-  ].join("\n")
-}
-
-test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
+test.serial("Parse a V4 TDX quote from Tappd", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
-  const { header, body, signature } = parseTdxQuote(quote)
+  const { header, body } = parseTdxQuote(quote)
   const expectedMRTD =
     "c68518a0ebb42136c12b2275164f8c72f25fa9a34392228687ed6e9caeb9c0f1dbd895e9cf475121c029dc47e70e91fd"
   const expectedReportData =
@@ -43,13 +33,19 @@ test.serial("Parse a V4 TDX quote from Tappd, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  // t.is(signature.cert_data, null) // Quote is missing cert data
+  t.true(
+    verifyTdxCertChain(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
 })
 
-test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
+test.serial("Parse a V4 TDX quote from Edgeless", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-edgeless.bin")
 
-  const { header, body, signature } = parseTdxQuote(quote)
+  const { header, body } = parseTdxQuote(quote)
   const expectedMRTD =
     "b65ea009e424e6f761fdd3d7c8962439453b37ecdf62da04f7bc5d327686bb8bafc8a5d24a9c31cee60e4aba87c2f71b"
   const expectedReportData =
@@ -63,13 +59,19 @@ test.serial("Parse a V4 TDX quote from Edgeless, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  // t.is(signature.cert_data, null) // Quote is missing cert data
+  t.true(
+    verifyTdxCertChain(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
 })
 
 test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-phala.bin")
 
-  const { header, body, signature } = parseTdxQuote(quote)
+  const { header, body } = parseTdxQuote(quote)
   const expectedMRTD =
     "91eb2b44d141d4ece09f0c75c2c53d247a3c68edd7fafe8a3520c942a604a407de03ae6dc5f87f27428b2538873118b7"
   const expectedReportData =
@@ -83,14 +85,20 @@ test.serial("Parse a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  // t.is(signature.cert_data, null) // Quote is missing cert data
+  t.true(
+    verifyTdxCertChain(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
 })
 
 test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   const quoteHex = fs.readFileSync("test/sample/tdx-v4-phala.hex", "utf-8")
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
-  const { header, body, signature } = parseTdxQuote(quote)
+  const { header, body } = parseTdxQuote(quote)
   const expectedMRTD =
     "7ba9e262ce6979087e34632603f354dd8f8a870f5947d116af8114db6c9d0d74c48bec4280e5b4f4a37025a10905bb29"
   const expectedReportData =
@@ -104,14 +112,19 @@ test.serial("Parse a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  // t.is(signature.cert_data, null) // Quote is missing cert data
+  t.true(
+    verifyTdxCertChain(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
 })
 
 test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.bin")
 
-  const { header, body, signature } = parseTdxQuote(quote)
-  // See: https://github.com/MoeMahhouk/tdx-quote-parser
+  const { header, body } = parseTdxQuote(quote)
   const expectedMRTD = reverseHexBytes(
     "18bcec2014a3ff000c46191e960ca4fe949f9adb2d8da557dbacee87f6ef7e2411fd5f09dc2b834506959bf69626ddf2",
   )
@@ -127,43 +140,12 @@ test.serial("Parse a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
-  // t.is(signature.cert_data, null) // Quote is missing cert data
-
-  t.deepEqual(
-    reverseHexBytes(hex(body.mr_seam)),
-    "30843fa6f79b6ad4c9460935ceac736f9ec16f60e47b5268a92767f30973a95a5ba02cee3c778a96c60e21109ad89097",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.mr_seam_signer)),
-    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.mr_config_id)),
-    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.mr_owner)),
-    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.mr_owner_config)),
-    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.rtmr0)),
-    "b29e90f91d6a29cfdaaa52adfd65f6c9f1dfacf2dfec14d0b7df44a72dac21a9f76986c4115ebefecb8dd50845209809",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.rtmr1)),
-    "930fc60b55e679f8348681094101c75399dc4776b19a32f6b0277f4872d8db978102cfb37c1f43eb6a71f12402103d38",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.rtmr2)),
-    "6a90479d9e688add2225c755b71c1acfa3cfa69fb4c2d2fb11ace12e0af1cf90440f577ec7b0dbbf7892d4f42fc4cfee",
-  )
-  t.deepEqual(
-    reverseHexBytes(hex(body.rtmr3)),
-    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  t.true(
+    verifyTdxCertChain(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
   )
 })
 
@@ -184,11 +166,44 @@ test.serial("Parse a V4 TDX quote from Azure", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.true(verifyTdxV4Signature(quote))
+  t.true(
+    verifyTdxCertChainBase64(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
 })
 
-test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
+test.serial("Parse a V4 TDX quote from Trustee", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx-v4-trustee.dat")
+  const { header, body } = parseTdxQuote(quote)
+
+  const expectedMRTD =
+    "705ee9381b8633a9fbe532b52345e8433343d2868959f57889d84ca377c395b689cac1599ccea1b7d420483a9ce5f031"
+  const expectedReportData =
+    "7c71fe2c86eff65a7cf8dbc22b3275689fd0464a267baced1bf94fc1324656aeb755da3d44d098c0c87382f3a5f85b45c8a28fee1d3bdb38342bf96671501429"
+
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
+  t.true(
+    verifyTdxCertChain(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
+})
+
+test.serial("Verify a V4 TDX quote from Intel", async (t) => {
   const quote = fs.readFileSync("test/sample/tdx/quote.dat")
-  const { header, body, signature } = parseTdxQuote(quote)
+  const { header, body } = parseTdxQuote(quote)
 
   const expectedMRTD =
     "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
@@ -202,70 +217,62 @@ test.serial("Parse a V4 TDX quote from Intel verifier examples", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-
-  // Merge pinned roots (if any) into the certificate pool to complete the chain
-  const pinnedRoots = loadRootCerts("certs")
-  const pinnedRootPems = pinnedRoots.map((c) => derToPem(c.raw))
-
-  const leaf = fs.readFileSync("test/sample/tdx/pckCert.pem", "utf-8")
-  const { status, root, chain } = verifyPCKChain(
-    [leaf, ...pinnedRootPems],
-    Date.parse("2025-09-01"),
-  )
-  t.is(status, "valid")
-  t.truthy(root)
-
-  // 1. QE Report Signature verification with logging
-  t.true(verifyQeReportSignature(quote, [leaf]))
-
-  // 2. QE Report Binding verification with logging
-  t.true(verifyQeReportBinding(quote))
-
-  // 3. Quote Signature verification with logging
   t.true(verifyTdxV4Signature(quote))
+
+  const root = extractPemCertificates(
+    fs.readFileSync("test/sample/tdx/trustedRootCaCert.pem"),
+  ).map((txt) => new X509Certificate(txt))
+  const certdata = [
+    ...extractPemCertificates(
+      fs.readFileSync("test/sample/tdx/pckSignChain.pem"),
+    ),
+    ...extractPemCertificates(fs.readFileSync("test/sample/tdx/pckCert.pem")),
+  ]
+  t.true(verifyTdxCertChain(quote, root, Date.parse("2025-09-01"), certdata))
 })
 
-test.serial(
-  "Verify a V4 TDX quote from Google Cloud, including the full cert chain",
-  async (t) => {
-    const data = JSON.parse(
-      fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
-    )
-    const quote: string = data.tdx.quote
-    const { header, body, signature } = parseTdxQuoteBase64(quote)
+test.serial("Parse a V4 TDX quote from GCP", async (t) => {
+  const data = JSON.parse(
+    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+  )
+  const quote: string = data.tdx.quote
+  const { header, body } = parseTdxQuoteBase64(quote)
 
-    const expectedMRTD =
-      "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
-    const expectedReportData =
-      "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
+  const expectedMRTD =
+    "409c0cd3e63d9ea54d817cf851983a220131262664ac8cd02cc6a2e19fd291d2fdd0cc035d7789b982a43a92a4424c99"
+  const expectedReportData =
+    "806dfeec9d10c22a60b12751216d75fb358d83088ea72dd07eb49c84de24b8a49d483085c4350e545689955bdd10e1d8b55ef7c6d288a17032acece698e35db8"
 
-    t.is(header.version, 4)
-    t.is(header.tee_type, 129)
-    t.is(hex(body.mr_td), expectedMRTD)
-    t.is(hex(body.report_data), expectedReportData)
-    t.deepEqual(body.mr_config_id, Buffer.alloc(48))
-    t.deepEqual(body.mr_owner, Buffer.alloc(48))
-    t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-    t.true(verifyTdxV4Signature(quote))
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+  t.true(verifyTdxV4Signature(quote))
+  t.true(
+    verifyTdxCertChainBase64(
+      quote,
+      loadRootCerts("test/certs"),
+      Date.parse("2025-09-01"),
+    ),
+  )
+})
 
-    t.truthy(signature.cert_data)
+test.serial("Return expired if certificate is not yet valid", async (t) => {
+  const data = JSON.parse(
+    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+  )
+  const quote: string = data.tdx.quote
+  const { header, body, signature } = parseTdxQuoteBase64(quote)
 
-    const certs = extractPemCertificates(signature.cert_data)
-    t.true(certs.length == 3)
-    const { status, root } = verifyPCKChain(certs, Date.parse("2025-09-01"))
-    t.is(status, "valid")
-    t.true(root && isPinnedRootCertificate(root, "test/certs"))
-
-    t.true(verifyQeReportBinding(quote))
-    t.true(verifyQeReportSignature(quote))
-
-    // Verifier returns expired if any certificate is expired or not yet valid
-    const { status: status2 } = verifyPCKChain(certs, Date.parse("2050-09-01"))
-    t.is(status2, "expired")
-    const { status: status3 } = verifyPCKChain(certs, Date.parse("2000-09-01"))
-    t.is(status3, "expired")
-  },
-)
+  const certs = extractPemCertificates(signature.cert_data)
+  const { status: status2 } = verifyPCKChain(certs, Date.parse("2050-09-01"))
+  t.is(status2, "expired")
+  const { status: status3 } = verifyPCKChain(certs, Date.parse("2000-09-01"))
+  t.is(status3, "expired")
+})
 
 // test.skip("Parse a V5 TDX 1.0 attestation", async (t) => {
 //   // TODO
