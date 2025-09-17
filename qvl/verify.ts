@@ -36,14 +36,14 @@ export function verifyTdx(
 ) {
   const { signature, header } = parseTdxQuote(quote)
   const certs = extractPemCertificates(signature.cert_data)
-  let { status, root } = verifyPCKChain(certs, date || +new Date(), crls)
+  let { status, root } = verifyPCKChain(certs, date ?? +new Date(), crls)
 
   // Use fallback certs, only if certdata is not provided
   if (!root && certs.length === 0) {
     if (!extraCerts) {
       throw new Error("verifyTdx: missing certdata")
     }
-    const fallback = verifyPCKChain(extraCerts, date || +new Date(), crls)
+    const fallback = verifyPCKChain(extraCerts, date ?? +new Date(), crls)
     status = fallback.status
     root = fallback.root
   }
@@ -163,7 +163,7 @@ export function verifyPCKChain(
     const notBefore = new Date(c.validFrom).getTime()
     const notAfter = new Date(c.validTo).getTime()
     if (
-      verifyAtTimeMs &&
+      verifyAtTimeMs !== null &&
       !(notBefore <= verifyAtTimeMs && verifyAtTimeMs <= notAfter)
     ) {
       return { status: "expired", root: chain[chain.length - 1] ?? null, chain }

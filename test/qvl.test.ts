@@ -301,7 +301,9 @@ function pemToDer(pem: string): Buffer {
 function derToPem(der: Buffer): string {
   const b64 = der.toString("base64")
   const lines = b64.match(/.{1,64}/g) || []
-  return `-----BEGIN CERTIFICATE-----\n${lines.join("\n")}\n-----END CERTIFICATE-----\n`
+  return `-----BEGIN CERTIFICATE-----\n${lines.join(
+    "\n",
+  )}\n-----END CERTIFICATE-----\n`
 }
 
 function tamperPemSignature(pem: string): string {
@@ -364,6 +366,35 @@ function rebuildQuoteWithCertData(baseQuote: Buffer, certData: Buffer): Buffer {
   tail.writeUInt32LE(certData.length, 2)
 
   const newSigData = Buffer.concat([fixedPlusAuth, tail, certData])
+  const newSigLen = Buffer.alloc(4)
+  newSigLen.writeUInt32LE(newSigData.length, 0)
+
+  const prefix = baseQuote.subarray(0, signedLen)
+  return Buffer.concat([prefix, newSigLen, newSigData])
+}
+
+function rebuildQuoteWithCertType(
+  baseQuote: Buffer,
+  certDataType: number,
+): Buffer {
+  const signedLen = getTdxV4SignedRegion(baseQuote).length
+  const sigLen = baseQuote.readUInt32LE(signedLen)
+  const sigStart = signedLen + 4
+  const sigData = baseQuote.subarray(sigStart, sigStart + sigLen)
+
+  const FIXED_LEN = 64 + 64 + 6 + 384 + 64 + 2 // ECDSA fixed portion
+  const qeAuthLen = sigData.readUInt16LE(64 + 64 + 6 + 384 + 64)
+  const fixedPlusAuth = sigData.subarray(0, FIXED_LEN + qeAuthLen)
+
+  // Extract existing cert_data tail
+  const certDataOffset = FIXED_LEN + qeAuthLen + 2 + 4
+  const existingCertData = sigData.subarray(certDataOffset)
+
+  const tail = Buffer.alloc(2 + 4)
+  tail.writeUInt16LE(certDataType, 0)
+  tail.writeUInt32LE(existingCertData.length, 2)
+
+  const newSigData = Buffer.concat([fixedPlusAuth, tail, existingCertData])
   const newSigLen = Buffer.alloc(4)
   newSigLen.writeUInt32LE(newSigData.length, 0)
 
@@ -637,4 +668,83 @@ test.serial("Reject a V4 TDX quote, incorrect TD signature", async (t) => {
   )
   t.truthy(err)
   t.regex(err!.message, /attestation_public_key signature/i)
+})
+
+test.serial(
+  "Reject a V4 TDX quote, missing certdata (no fallback)",
+  async (t) => {
+    const quoteB64 = getGcpQuoteBase64()
+    const base = Buffer.from(quoteB64, "base64")
+    const noEmbedded = rebuildQuoteWithCertData(base, Buffer.alloc(0))
+    const err = t.throws(() =>
+      verifyTdx(noEmbedded, loadRootCerts("test/certs"), BASE_TIME),
+    )
+    t.truthy(err)
+    t.regex(err!.message, /missing certdata/i)
+  },
+)
+
+test.serial(
+  "Reject a V4 TDX quote, expired or not-yet-valid certificate chain",
+  async (t) => {
+    const quoteB64 = getGcpQuoteBase64()
+    const err = t.throws(() =>
+      verifyTdxBase64(quoteB64, loadRootCerts("test/certs"), 0),
+    )
+    t.truthy(err)
+    t.regex(err!.message, /expired cert chain/i)
+  },
+)
+
+test.serial("Reject a V4 TDX quote, unsupported TEE type", async (t) => {
+  const quoteB64 = getGcpQuoteBase64()
+  const original = Buffer.from(quoteB64, "base64")
+  const mutated = Buffer.from(original)
+  // header.tee_type at offset 4 (UInt32LE)
+  mutated.writeUInt32LE(0, 4)
+  const err = t.throws(() =>
+    verifyTdx(mutated, loadRootCerts("test/certs"), BASE_TIME),
+  )
+  t.truthy(err)
+  t.regex(err!.message, /only tdx is supported/i)
+})
+
+test.serial(
+  "Reject a V4 TDX quote, unsupported attestation key type",
+  async (t) => {
+    const quoteB64 = getGcpQuoteBase64()
+    const original = Buffer.from(quoteB64, "base64")
+    const mutated = Buffer.from(original)
+    // header.att_key_type at offset 2 (UInt16LE)
+    mutated.writeUInt16LE(1, 2)
+    const err = t.throws(() =>
+      verifyTdx(mutated, loadRootCerts("test/certs"), BASE_TIME),
+    )
+    t.truthy(err)
+    t.regex(err!.message, /only ECDSA att_key_type is supported/i)
+  },
+)
+
+test.serial("Reject a V4 TDX quote, unsupported cert_data_type", async (t) => {
+  const quoteB64 = getGcpQuoteBase64()
+  const original = Buffer.from(quoteB64, "base64")
+  const mutated = rebuildQuoteWithCertType(original, 0)
+  const err = t.throws(() =>
+    verifyTdx(mutated, loadRootCerts("test/certs"), BASE_TIME),
+  )
+  t.truthy(err)
+  t.regex(err!.message, /only PCK cert_data is supported/i)
+})
+
+test.serial("Reject a TDX quote with unsupported version", async (t) => {
+  const quoteB64 = getGcpQuoteBase64()
+  const original = Buffer.from(quoteB64, "base64")
+  const mutated = Buffer.from(original)
+  // header.version at offset 0 (UInt16LE)
+  mutated.writeUInt16LE(5, 0)
+  const err = t.throws(() =>
+    verifyTdx(mutated, loadRootCerts("test/certs"), BASE_TIME),
+  )
+  t.truthy(err)
+  t.regex(err!.message, /Unsupported quote version/i)
 })
