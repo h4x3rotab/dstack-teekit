@@ -20,30 +20,40 @@ import {
   parseCrlRevokedSerials,
   toBase64Url,
 } from "./utils.js"
+import { intelSgxRootCaPem } from "./rootCa.js"
+
+export interface VerifyTdxConfig {
+  crls: Buffer[]
+  pinnedRootCerts?: X509Certificate[]
+  date?: number
+  extraCertdata?: string[]
+}
+
+const DEFAULT_PINNED_ROOT_CERTS: X509Certificate[] = [
+  new X509Certificate(intelSgxRootCaPem),
+]
 
 /**
  * Verify a complete chain of trust for a TDX enclave, including the
  * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
  *
- * Optional: accepts `extraCerts`, which is used if `quote` is missing certdata.
+ * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
  */
-export function verifyTdx(
-  quote: Buffer,
-  pinnedRootCerts: X509Certificate[],
-  date?: number,
-  extraCerts?: string[],
-  crls?: Buffer[],
-) {
+export function verifyTdx(quote: Buffer, config?: VerifyTdxConfig) {
+  const pinnedRootCerts = config?.pinnedRootCerts ?? DEFAULT_PINNED_ROOT_CERTS
+  const date = config?.date
+  const extraCertdata = config?.extraCertdata
+  const crls = config?.crls
   const { signature, header } = parseTdxQuote(quote)
   const certs = extractPemCertificates(signature.cert_data)
   let { status, root } = verifyPCKChain(certs, date ?? +new Date(), crls)
 
   // Use fallback certs, only if certdata is not provided
   if (!root && certs.length === 0) {
-    if (!extraCerts) {
+    if (!extraCertdata) {
       throw new Error("verifyTdx: missing certdata")
     }
-    const fallback = verifyPCKChain(extraCerts, date ?? +new Date(), crls)
+    const fallback = verifyPCKChain(extraCertdata, date ?? +new Date(), crls)
     status = fallback.status
     root = fallback.root
   }
@@ -77,7 +87,7 @@ export function verifyTdx(
   if (signature.cert_data_type !== 5) {
     throw new Error("verifyTdx: only PCK cert_data is supported")
   }
-  if (!verifyQeReportSignature(quote, extraCerts)) {
+  if (!verifyQeReportSignature(quote, extraCertdata)) {
     throw new Error("verifyTdx: invalid qe report signature")
   }
   if (!verifyQeReportBinding(quote)) {
@@ -90,20 +100,8 @@ export function verifyTdx(
   return true
 }
 
-export function verifyTdxBase64(
-  quote: string,
-  pinnedRootCerts: X509Certificate[],
-  date?: number,
-  extraCerts?: string[],
-  crls?: Buffer[],
-) {
-  return verifyTdx(
-    Buffer.from(quote, "base64"),
-    pinnedRootCerts,
-    date,
-    extraCerts,
-    crls,
-  )
+export function verifyTdxBase64(quote: string, config?: VerifyTdxConfig) {
+  return verifyTdx(Buffer.from(quote, "base64"), config)
 }
 
 /**
