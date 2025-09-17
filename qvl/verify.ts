@@ -100,7 +100,7 @@ export function verifyTdxCertChainBase64(
  */
 export function verifyPCKChain(
   certData: string[],
-  verifyAtTimeMs: number,
+  verifyAtTimeMs: number | null,
 ): {
   status: "valid" | "invalid" | "expired"
   root: X509Certificate | null
@@ -142,7 +142,10 @@ export function verifyPCKChain(
   for (const c of chain) {
     const notBefore = new Date(c.validFrom).getTime()
     const notAfter = new Date(c.validTo).getTime()
-    if (!(notBefore <= verifyAtTimeMs && verifyAtTimeMs <= notAfter)) {
+    if (
+      verifyAtTimeMs &&
+      !(notBefore <= verifyAtTimeMs && verifyAtTimeMs <= notAfter)
+    ) {
       return { status: "expired", root: chain[chain.length - 1] ?? null, chain }
     }
   }
@@ -176,8 +179,9 @@ export function verifyPCKChain(
 }
 
 /**
- * Verify that the cert chain has signed the quoting enclave report,
- * by checking qe_report_signature against the PCK leaf certificate public key.
+ * Verify that the cert chain appropriately signed the quoting enclave report.
+ * This verifies the PCK leaf certificate public key, against qe_report_signature
+ * and the qe_report body (384 bytes).
  */
 export function verifyQeReportSignature(
   quoteInput: string | Buffer,
@@ -202,8 +206,7 @@ export function verifyQeReportSignature(
   }
   if (certs.length === 0) return false
 
-  // Use Date.now() because we don't care if valid is returned as "expired" here
-  const { chain } = verifyPCKChain(certs, Date.now())
+  const { chain } = verifyPCKChain(certs, null)
 
   if (chain.length === 0) return false
 
