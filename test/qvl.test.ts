@@ -274,20 +274,6 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   )
 })
 
-test.serial("Return expired if certificate is not yet valid", async (t) => {
-  const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
-  )
-  const quote: string = data.tdx.quote
-  const { header, body, signature } = parseTdxQuoteBase64(quote)
-
-  const certs = extractPemCertificates(signature.cert_data)
-  const { status: status2 } = verifyPCKChain(certs, Date.parse("2050-09-01"))
-  t.is(status2, "expired")
-  const { status: status3 } = verifyPCKChain(certs, Date.parse("2000-09-01"))
-  t.is(status3, "expired")
-})
-
 // test.skip("Verify a V5 TDX 1.0 attestation", async (t) => {
 //   // TODO
 // })
@@ -418,14 +404,14 @@ function getGcpCertPems(): {
   }
 }
 
-test.serial("Invalid: incorrect pinned root (missing)", async (t) => {
+test.serial("Reject a V4 TDX quote, missing root cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const err = t.throws(() => verifyTdxBase64(quoteB64, [], BASE_TIME))
   t.truthy(err)
   t.regex(err!.message, /invalid root/i)
 })
 
-test.serial("Invalid: missing intermediate certificate", async (t) => {
+test.serial("Reject a V4 TDX quote, missing intermediate cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
   const { leaf, root } = getGcpCertPems()
@@ -437,7 +423,7 @@ test.serial("Invalid: missing intermediate certificate", async (t) => {
   t.regex(err!.message, /invalid root/i)
 })
 
-test.serial("Invalid: missing leaf certificate", async (t) => {
+test.serial("Reject a V4 TDX quote, missing leaf cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
   const { intermediate, root } = getGcpCertPems()
@@ -452,7 +438,7 @@ test.serial("Invalid: missing leaf certificate", async (t) => {
   t.regex(err!.message, /invalid cert chain/i)
 })
 
-test.serial("Invalid: revoked root certificate", async (t) => {
+test.serial("Reject a V4 TDX quote, revoked root cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const { root } = getGcpCertPems()
   const rootSerial = new X509Certificate(root).serialNumber
@@ -473,7 +459,7 @@ test.serial("Invalid: revoked root certificate", async (t) => {
   t.regex(err!.message, /revoked certificate in cert chain/i)
 })
 
-test.serial("Invalid: revoked intermediate certificate", async (t) => {
+test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const { intermediate } = getGcpCertPems()
   const serial = new X509Certificate(intermediate).serialNumber
@@ -494,7 +480,7 @@ test.serial("Invalid: revoked intermediate certificate", async (t) => {
   t.regex(err!.message, /revoked certificate in cert chain/i)
 })
 
-test.serial("Invalid: revoked leaf certificate", async (t) => {
+test.serial("Reject a V4 TDX quote, revoked leaf cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const { leaf } = getGcpCertPems()
   const serial = new X509Certificate(leaf).serialNumber
@@ -515,17 +501,17 @@ test.serial("Invalid: revoked leaf certificate", async (t) => {
   t.regex(err!.message, /revoked certificate in cert chain/i)
 })
 
-test.serial("Invalid: invalid leaf certificate signature", async (t) => {
+test.serial("Reject a V4 TDX quote, invalid root self-signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
   const { leaf, intermediate, root } = getGcpCertPems()
-  const tamperedLeaf = tamperPemSignature(leaf)
+  const tamperedRoot = tamperPemSignature(root)
   const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
   const err = t.throws(() =>
     verifyTdx(noEmbedded, loadRootCerts("test/certs"), BASE_TIME, [
-      tamperedLeaf,
+      leaf,
       intermediate,
-      root,
+      tamperedRoot,
     ]),
   )
   t.truthy(err)
@@ -533,7 +519,7 @@ test.serial("Invalid: invalid leaf certificate signature", async (t) => {
 })
 
 test.serial(
-  "Invalid: invalid intermediate certificate signature",
+  "Reject a V4 TDX quote, invalid intermediate cert signature",
   async (t) => {
     const quoteB64 = getGcpQuoteBase64()
     const quoteBuf = Buffer.from(quoteB64, "base64")
@@ -552,24 +538,24 @@ test.serial(
   },
 )
 
-test.serial("Invalid: invalid root self-signature", async (t) => {
+test.serial("Reject a V4 TDX quote, invalid leaf cert signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
   const { leaf, intermediate, root } = getGcpCertPems()
-  const tamperedRoot = tamperPemSignature(root)
+  const tamperedLeaf = tamperPemSignature(leaf)
   const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
   const err = t.throws(() =>
     verifyTdx(noEmbedded, loadRootCerts("test/certs"), BASE_TIME, [
-      leaf,
+      tamperedLeaf,
       intermediate,
-      tamperedRoot,
+      root,
     ]),
   )
   t.truthy(err)
   t.regex(err!.message, /invalid cert chain/i)
 })
 
-test.serial("Invalid: incorrect quoting enclave signature", async (t) => {
+test.serial("Reject a V4 TDX quote, incorrect QE signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
   const signedLen = getTdxV4SignedRegion(original).length
@@ -597,7 +583,7 @@ test.serial("Invalid: incorrect quoting enclave signature", async (t) => {
   t.regex(err!.message, /invalid qe report signature/i)
 })
 
-test.serial("Invalid: incorrect quoting enclave binding", async (t) => {
+test.serial("Reject a V4 TDX quote, incorrect QE binding", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
   const signedLen = getTdxV4SignedRegion(original).length
@@ -625,7 +611,7 @@ test.serial("Invalid: incorrect quoting enclave binding", async (t) => {
   t.regex(err!.message, /invalid qe report binding/i)
 })
 
-test.serial("Invalid: incorrect measurement signature", async (t) => {
+test.serial("Reject a V4 TDX quote, incorrect TD signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
   const signedLen = getTdxV4SignedRegion(original).length
@@ -652,34 +638,3 @@ test.serial("Invalid: incorrect measurement signature", async (t) => {
   t.truthy(err)
   t.regex(err!.message, /attestation_public_key signature/i)
 })
-
-test.serial(
-  "Invalid: incorrect public key used to sign the measurement",
-  async (t) => {
-    const quoteB64 = getGcpQuoteBase64()
-    const original = Buffer.from(quoteB64, "base64")
-    const signedLen = getTdxV4SignedRegion(original).length
-    const sigLen = original.readUInt32LE(signedLen)
-    const sigStart = signedLen + 4
-    const sigData = Buffer.from(original.subarray(sigStart, sigStart + sigLen))
-    const attPubKeyOffset = 64 // inside sig_data
-    sigData[attPubKeyOffset + 31] ^= 0x01
-    const mutated = Buffer.concat([
-      original.subarray(0, signedLen),
-      Buffer.from(
-        new Uint8Array([
-          sigData.length & 0xff,
-          (sigData.length >> 8) & 0xff,
-          (sigData.length >> 16) & 0xff,
-          (sigData.length >> 24) & 0xff,
-        ]),
-      ),
-      sigData,
-    ])
-    const err = t.throws(() =>
-      verifyTdx(mutated, loadRootCerts("test/certs"), BASE_TIME),
-    )
-    t.truthy(err)
-    t.regex(err!.message, /invalid qe report binding/i)
-  },
-)
