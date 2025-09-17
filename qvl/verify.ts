@@ -16,6 +16,8 @@ import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,
   extractPemCertificates,
+  normalizeSerialHex,
+  parseCrlRevokedSerials,
   toBase64Url,
 } from "./utils.js"
 
@@ -30,16 +32,17 @@ export function verifyTdxCertChain(
   pinnedRootCerts: X509Certificate[],
   date?: number,
   extraCerts?: string[],
+  crls?: Buffer[],
 ) {
   const { signature, header } = parseTdxQuote(quote)
   const certs = extractPemCertificates(signature.cert_data)
-  let { status, root } = verifyPCKChain(certs, date || +new Date())
+  let { status, root } = verifyPCKChain(certs, date || +new Date(), crls)
 
   if (!root && certs.length === 0) {
     if (!extraCerts) {
       throw new Error("verifyTdxCertChain: missing certdata")
     }
-    const fallback = verifyPCKChain(extraCerts, date || +new Date())
+    const fallback = verifyPCKChain(extraCerts, date || +new Date(), crls)
     status = fallback.status
     root = fallback.root
   }
@@ -89,12 +92,14 @@ export function verifyTdxCertChainBase64(
   pinnedRootCerts: X509Certificate[],
   date?: number,
   extraCerts?: string[],
+  crls?: Buffer[],
 ) {
   return verifyTdxCertChain(
     Buffer.from(quote, "base64"),
     pinnedRootCerts,
     date,
     extraCerts,
+    crls,
   )
 }
 
@@ -107,8 +112,9 @@ export function verifyTdxCertChainBase64(
 export function verifyPCKChain(
   certData: string[],
   verifyAtTimeMs: number | null,
+  crls?: Buffer[],
 ): {
-  status: "valid" | "invalid" | "expired"
+  status: "valid" | "invalid" | "expired" | "revoked"
   root: X509Certificate | null
   chain: X509Certificate[]
 } {
@@ -255,6 +261,28 @@ export function verifyPCKChain(
       }
       if (subsequentCAs > bc.pathLength) {
         return { status: "invalid", root: null, chain: [] }
+      }
+    }
+  }
+
+  // CRL: Check all certificates in the PCK chain against revocation lists
+  if (crls && crls.length > 0) {
+    const revoked = new Set<string>()
+    for (const crl of crls) {
+      try {
+        const serials = parseCrlRevokedSerials(crl)
+        for (const s of serials) revoked.add(s)
+      } catch {
+        // ignore malformed CRL
+      }
+    }
+    if (revoked.size > 0) {
+      for (const cert of chain) {
+        // Node returns colonless/colon-separated uppercase hex; normalize
+        const serial = normalizeSerialHex(cert.serialNumber)
+        if (revoked.has(serial)) {
+          return { status: "revoked", root: null, chain: [] }
+        }
       }
     }
   }
