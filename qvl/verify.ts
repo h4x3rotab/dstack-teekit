@@ -11,11 +11,18 @@ import {
   KeyUsageFlags,
 } from "@peculiar/x509"
 
-import { getTdxV4SignedRegion, parseTdxQuote } from "./structs.js"
+import {
+  getTdx10SignedRegion,
+  getTdx15SignedRegion,
+  parseTdxQuote,
+  TdxQuoteV5Descriptor,
+  TdxQuoteHeader,
+} from "./structs.js"
 import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,
   extractPemCertificates,
+  hex,
   normalizeSerialHex,
   parseCrlRevokedSerials,
   toBase64Url,
@@ -100,7 +107,7 @@ export function verifyTdx(quote: Buffer, config?: VerifyTdxConfig) {
   if (!verifyQeReportBinding(quote)) {
     throw new Error("verifyTdx: invalid qe report binding")
   }
-  if (!verifyTdxV4Signature(quote)) {
+  if (!verifyTdxQuoteSignature(quote)) {
     throw new Error("verifyTdx: invalid attestation_public_key signature")
   }
 
@@ -306,7 +313,8 @@ export function verifyQeReportSignature(
     : Buffer.from(quoteInput, "base64")
 
   const { header, signature } = parseTdxQuote(quoteBytes)
-  if (header.version !== 4) throw new Error("Unsupported quote version")
+  if (header.version !== 4 && header.version !== 5)
+    throw new Error("Unsupported quote version")
 
   // Must have a QE report to verify
   if (!signature.qe_report_present || signature.qe_report.length !== 384) {
@@ -359,7 +367,8 @@ export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
     : Buffer.from(quoteInput, "base64")
 
   const { header, signature } = parseTdxQuote(quoteBytes)
-  if (header.version !== 4) throw new Error("Unsupported quote version")
+  if (header.version !== 4 && header.version !== 5)
+    throw new Error("Unsupported quote version")
   if (!signature.qe_report_present) throw new Error("Missing QE report")
 
   const pubRaw = signature.attestation_public_key
@@ -398,18 +407,23 @@ export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
  * attestation public key. This checks only the quote signature itself and does
  * not validate the certificate chain or QE report.
  */
-export function verifyTdxV4Signature(quoteInput: string | Buffer): boolean {
+export function verifyTdxQuoteSignature(quoteInput: string | Buffer): boolean {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
     : Buffer.from(quoteInput, "base64")
 
   const { header, signature } = parseTdxQuote(quoteBytes)
 
-  if (header.version !== 4) {
+  if (header.version !== 4 && header.version !== 5) {
     throw new Error(`Unsupported TDX quote version: ${header.version}`)
   }
 
-  const message = getTdxV4SignedRegion(quoteBytes)
+  let message
+  if (header.version === 4) {
+    message = getTdx10SignedRegion(quoteBytes)
+  } else {
+    message = getTdx15SignedRegion(quoteBytes)
+  }
 
   const rawSig = signature.ecdsa_signature
   const derSig = encodeEcdsaSignatureToDer(rawSig)

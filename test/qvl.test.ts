@@ -11,7 +11,7 @@ import {
   verifyTdx,
   verifyTdxBase64,
   loadRootCerts,
-  getTdxV4SignedRegion,
+  getTdx10SignedRegion,
   computeCertSha256Hex,
 } from "../qvl"
 import { X509Certificate } from "node:crypto"
@@ -266,20 +266,36 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
 
   t.true(
     verifyTdxBase64(quote, {
-      pinnedRootCerts: loadRootCerts("test/certs"),
       date: BASE_TIME,
       crls: [],
     }),
   )
 })
 
-// test.skip("Verify a V5 TDX 1.0 attestation", async (t) => {
-//   // TODO
-// })
+test.serial("Verify a V5 TDX quote from Trustee", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const { header, body } = parseTdxQuote(quote)
 
-// test.skip("Verify a V5 TDX 1.5 attestation", async (t) => {
-//   // TODO
-// })
+  const expectedMRTD =
+    "dfba221b48a22af8511542ee796603f37382800840dcd978703909bf8e64d4c8a1e9de86e7c9638bfcba422f3886400a"
+  const expectedReportData =
+    "6d6ab13b046cff606ac0074be13981b07b6325dba10b5facc96febf551c0c3be2b75f92fe1f88f4bb996969ad0174b4b7a70261b7b85c844f4b33a4674fd049f"
+
+  t.is(header.version, 5)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+
+  t.true(
+    verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+    }),
+  )
+})
 
 // test.skip("Verify an SGX attestation", async (t) => {
 //   // TODO
@@ -349,7 +365,7 @@ function buildCRLWithSerials(serialsUpperHex: string[]): Buffer {
 }
 
 function rebuildQuoteWithCertData(baseQuote: Buffer, certData: Buffer): Buffer {
-  const signedLen = getTdxV4SignedRegion(baseQuote).length
+  const signedLen = getTdx10SignedRegion(baseQuote).length
   const sigLen = baseQuote.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
   const sigData = baseQuote.subarray(sigStart, sigStart + sigLen)
@@ -567,7 +583,7 @@ test.serial("Reject a V4 TDX quote, invalid leaf cert signature", async (t) => {
 test.serial("Reject a V4 TDX quote, incorrect QE signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
-  const signedLen = getTdxV4SignedRegion(original).length
+  const signedLen = getTdx10SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
   const sigData = Buffer.from(original.subarray(sigStart, sigStart + sigLen))
@@ -599,7 +615,7 @@ test.serial("Reject a V4 TDX quote, incorrect QE signature", async (t) => {
 test.serial("Reject a V4 TDX quote, incorrect QE binding", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
-  const signedLen = getTdxV4SignedRegion(original).length
+  const signedLen = getTdx10SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
   const sigData = Buffer.from(original.subarray(sigStart, sigStart + sigLen))
@@ -631,7 +647,7 @@ test.serial("Reject a V4 TDX quote, incorrect QE binding", async (t) => {
 test.serial("Reject a V4 TDX quote, incorrect TD signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
-  const signedLen = getTdxV4SignedRegion(original).length
+  const signedLen = getTdx10SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
   const sigData = Buffer.from(original.subarray(sigStart, sigStart + sigLen))
@@ -734,7 +750,7 @@ test.serial(
 test.serial("Reject a V4 TDX quote, unsupported cert_data_type", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const original = Buffer.from(quoteB64, "base64")
-  const signedLen = getTdxV4SignedRegion(original).length
+  const signedLen = getTdx10SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
   const sigData = Buffer.from(original.subarray(sigStart, sigStart + sigLen))
@@ -794,7 +810,7 @@ test.serial("Reject a TDX quote with unsupported version", async (t) => {
   const original = Buffer.from(quoteB64, "base64")
   const mutated = Buffer.from(original)
   // header.version at offset 0 (UInt16LE)
-  mutated.writeUInt16LE(5, 0)
+  mutated.writeUInt16LE(6, 0)
   const err = t.throws(() =>
     verifyTdx(mutated, {
       pinnedRootCerts: loadRootCerts("test/certs"),
