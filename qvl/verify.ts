@@ -63,11 +63,11 @@ export function verifyTdxCertChain(
   if (!rootIsValid) {
     throw new Error("verifyTdxCertChain: invalid root")
   }
-  if (!verifyQeReportBinding(quote)) {
-    throw new Error("verifyTdxCertChain: invalid qe report binding")
-  }
   if (!verifyQeReportSignature(quote, extraCerts)) {
     throw new Error("verifyTdxCertChain: invalid qe report signature")
+  }
+  if (!verifyQeReportBinding(quote)) {
+    throw new Error("verifyTdxCertChain: invalid qe report binding")
   }
   if (!verifyTdxV4Signature(quote)) {
     throw new Error(
@@ -229,7 +229,11 @@ export function verifyQeReportSignature(
 }
 
 /**
- * Verify QE binding: qe_report.report_data[0..32) == SHA256(attestation_public_key || qe_auth_data)
+ * Verify that the attestation_public_key in a quote matches its quoting enclave's
+ * report_data (QE binding):
+ *
+ * qe_report.report_data[0..32) == SHA256(attestation_public_key || qe_auth_data)
+ *
  * Accept several reasonable variants to accommodate ecosystem differences.
  */
 export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
@@ -244,54 +248,27 @@ export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
   const pubRaw = signature.attestation_public_key
   const pubUncompressed = Buffer.concat([Buffer.from([0x04]), pubRaw])
 
-  // Build SPKI DER from JWK and hash that too
-  const jwk = {
-    kty: "EC",
-    crv: "P-256",
-    x: pubRaw.subarray(0, 32).toString("base64url"),
-    y: pubRaw.subarray(32, 64).toString("base64url"),
-  } as const
-  let spki: Buffer | undefined
-  try {
-    spki = createPublicKey({ key: jwk, format: "jwk" }).export({
-      type: "spki",
-      format: "der",
-    }) as Buffer
-  } catch {}
-
   const candidates: Buffer[] = []
-  candidates.push(createHash("sha256").update(pubRaw).digest())
   candidates.push(createHash("sha256").update(pubUncompressed).digest())
-  if (spki) candidates.push(createHash("sha256").update(spki).digest())
   candidates.push(
     createHash("sha256").update(pubRaw).update(signature.qe_auth_data).digest(),
   )
-  candidates.push(
-    createHash("sha256")
-      .update(pubUncompressed)
-      .update(signature.qe_auth_data)
-      .digest(),
-  )
+  // // Other ways attestation_public_key may be hashed:
+  // candidates.push(createHash("sha256").update(pubRaw).digest())
+  // candidates.push(
+  //   createHash("sha256")
+  //     .update(pubUncompressed)
+  //     .update(signature.qe_auth_data)
+  //     .digest(),
+  // )
 
-  // SGX REPORT structure is 384 bytes; report_data occupies the last 64 bytes (offset 320)
+  // QE report is 384 bytes; report_data occupies the last 64 bytes (offset 320).
+  // The attestation_public_key should be embedded in the first half.
   const reportData = signature.qe_report.subarray(320, 384)
   const first = reportData.subarray(0, 32)
-  const second = reportData.subarray(32, 64)
 
-  // Direct half comparisons (prefer second half, then first)
   for (const digest of candidates) {
-    if (digest.equals(second) || digest.equals(first)) {
-      return true
-    }
-  }
-
-  // Some ecosystem implementations have placed the digest starting at a non-zero offset
-  // within report_data. As a pragmatic fallback, look for any candidate digest as a
-  // contiguous 32-byte subsequence anywhere within the 64-byte report_data field.
-  //
-  // In particular, we see an offset of "6" in a few examples (TODO)
-  for (const digest of candidates) {
-    if (reportData.indexOf(digest) !== -1) {
+    if (digest.equals(first)) {
       return true
     }
   }

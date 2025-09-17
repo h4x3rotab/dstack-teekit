@@ -6,7 +6,6 @@ import {
   parseTdxQuoteBase64,
   hex,
   reverseHexBytes,
-  verifyTdxV4Signature,
   extractPemCertificates,
   verifyPCKChain,
   verifyTdxCertChain,
@@ -32,7 +31,7 @@ test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChain(
       quote,
@@ -58,7 +57,7 @@ test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChain(
       quote,
@@ -84,7 +83,7 @@ test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChain(
       quote,
@@ -111,7 +110,7 @@ test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChain(
       quote,
@@ -139,7 +138,7 @@ test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChain(
       quote,
@@ -165,7 +164,7 @@ test.serial("Verify a V4 TDX quote from Azure", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChainBase64(
       quote,
@@ -191,7 +190,7 @@ test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChain(
       quote,
@@ -217,7 +216,6 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
 
   const root = extractPemCertificates(
     fs.readFileSync("test/sample/tdx/trustedRootCaCert.pem"),
@@ -250,7 +248,7 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   t.deepEqual(body.mr_config_id, Buffer.alloc(48))
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
-  t.true(verifyTdxV4Signature(quote))
+
   t.true(
     verifyTdxCertChainBase64(
       quote,
