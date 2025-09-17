@@ -8,8 +8,8 @@ import {
   reverseHexBytes,
   extractPemCertificates,
   verifyPCKChain,
-  verifyTdxCertChain,
-  verifyTdxCertChainBase64,
+  verifyTdx,
+  verifyTdxBase64,
   loadRootCerts,
 } from "../qvl"
 import { X509Certificate } from "node:crypto"
@@ -33,7 +33,7 @@ test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChain(
+    verifyTdx(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),
@@ -61,7 +61,7 @@ test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChain(
+    verifyTdx(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),
@@ -89,7 +89,7 @@ test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChain(
+    verifyTdx(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),
@@ -118,7 +118,7 @@ test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChain(
+    verifyTdx(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),
@@ -148,11 +148,7 @@ test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChain(
-      quote,
-      loadRootCerts("test/certs"),
-      Date.parse("2025-09-01"),
-    ),
+    verifyTdx(quote, loadRootCerts("test/certs"), Date.parse("2025-09-01")),
   )
 })
 
@@ -174,7 +170,7 @@ test.serial("Verify a V4 TDX quote from Azure", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChainBase64(
+    verifyTdxBase64(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),
@@ -202,7 +198,7 @@ test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChain(
+    verifyTdx(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),
@@ -242,15 +238,7 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
     fs.readFileSync("test/sample/tdx/rootCaCrl.der"),
     fs.readFileSync("test/sample/tdx/intermediateCaCrl.der"),
   ]
-  t.true(
-    verifyTdxCertChain(
-      quote,
-      root,
-      Date.parse("2025-09-01"),
-      certdata,
-      crls,
-    ),
-  )
+  t.true(verifyTdx(quote, root, Date.parse("2025-09-01"), certdata, crls))
 })
 
 test.serial("Verify a V4 TDX quote from GCP", async (t) => {
@@ -274,7 +262,7 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
   t.true(
-    verifyTdxCertChainBase64(
+    verifyTdxBase64(
       quote,
       loadRootCerts("test/certs"),
       Date.parse("2025-09-01"),

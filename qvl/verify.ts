@@ -22,12 +22,12 @@ import {
 } from "./utils.js"
 
 /**
- * Verify a complete certificate chain for a TDX enclave, including the
+ * Verify a complete chain of trust for a TDX enclave, including the
  * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
  *
  * Optional: accepts `extraCerts`, which is used if `quote` is missing certdata.
  */
-export function verifyTdxCertChain(
+export function verifyTdx(
   quote: Buffer,
   pinnedRootCerts: X509Certificate[],
   date?: number,
@@ -38,63 +38,66 @@ export function verifyTdxCertChain(
   const certs = extractPemCertificates(signature.cert_data)
   let { status, root } = verifyPCKChain(certs, date || +new Date(), crls)
 
+  // Use fallback certs, only if certdata is not provided
   if (!root && certs.length === 0) {
     if (!extraCerts) {
-      throw new Error("verifyTdxCertChain: missing certdata")
+      throw new Error("verifyTdx: missing certdata")
     }
     const fallback = verifyPCKChain(extraCerts, date || +new Date(), crls)
     status = fallback.status
     root = fallback.root
   }
+  if (status === "expired") {
+    throw new Error("verifyTdx: expired cert chain, or not yet valid")
+  }
+  if (status === "revoked") {
+    throw new Error("verifyTdx: revoked certificate in cert chain")
+  }
+  if (status !== "valid") {
+    throw new Error("verifyTdx: invalid cert chain")
+  }
   if (!root) {
-    throw new Error("verifyTdxCertChain: invalid cert chain")
+    throw new Error("verifyTdx: invalid cert chain")
   }
 
+  // Check against the pinned root certificates
   const candidateRootHash = computeCertSha256Hex(root)
   const knownRootHashes = new Set(pinnedRootCerts.map(computeCertSha256Hex))
   const rootIsValid = knownRootHashes.has(candidateRootHash)
+  if (!rootIsValid) {
+    throw new Error("verifyTdx: invalid root")
+  }
 
   if (header.tee_type !== 129) {
-    throw new Error("verifyTdxCertChain: only tdx is supported")
+    throw new Error("verifyTdx: only tdx is supported")
   }
   if (header.att_key_type !== 2) {
-    throw new Error("verifyTdxCertChain: only ECDSA att_key_type is supported")
+    throw new Error("verifyTdx: only ECDSA att_key_type is supported")
   }
   if (signature.cert_data_type !== 5) {
-    throw new Error("verifyTdxCertChain: only PCK cert_data is supported")
-  }
-  if (status === "expired") {
-    throw new Error("verifyTdxCertChain: expired cert chain, or not yet valid")
-  }
-  if (status !== "valid") {
-    throw new Error("verifyTdxCertChain: invalid cert chain")
-  }
-  if (!rootIsValid) {
-    throw new Error("verifyTdxCertChain: invalid root")
+    throw new Error("verifyTdx: only PCK cert_data is supported")
   }
   if (!verifyQeReportSignature(quote, extraCerts)) {
-    throw new Error("verifyTdxCertChain: invalid qe report signature")
+    throw new Error("verifyTdx: invalid qe report signature")
   }
   if (!verifyQeReportBinding(quote)) {
-    throw new Error("verifyTdxCertChain: invalid qe report binding")
+    throw new Error("verifyTdx: invalid qe report binding")
   }
   if (!verifyTdxV4Signature(quote)) {
-    throw new Error(
-      "verifyTdxCertChain: invalid attestation_public_key signature",
-    )
+    throw new Error("verifyTdx: invalid attestation_public_key signature")
   }
 
   return true
 }
 
-export function verifyTdxCertChainBase64(
+export function verifyTdxBase64(
   quote: string,
   pinnedRootCerts: X509Certificate[],
   date?: number,
   extraCerts?: string[],
   crls?: Buffer[],
 ) {
-  return verifyTdxCertChain(
+  return verifyTdx(
     Buffer.from(quote, "base64"),
     pinnedRootCerts,
     date,
@@ -213,21 +216,19 @@ export function verifyPCKChain(
   })
 
   // Leaf checks
-  {
-    const leafNode = chain[0]
-    const extCert = getExtForNode(leafNode)
-    if (extCert) {
-      const bc = extCert.getExtension(BasicConstraintsExtension)
-      if (bc && bc.ca) {
+  const leafNode = chain[0]
+  const extCert = getExtForNode(leafNode)
+  if (extCert) {
+    const bc = extCert.getExtension(BasicConstraintsExtension)
+    if (bc && bc.ca) {
+      return { status: "invalid", root: null, chain: [] }
+    }
+    const ku = extCert.getExtension(KeyUsagesExtension)
+    if (ku) {
+      const hasDigitalSignature =
+        (ku.usages & KeyUsageFlags.digitalSignature) !== 0
+      if (!hasDigitalSignature) {
         return { status: "invalid", root: null, chain: [] }
-      }
-      const ku = extCert.getExtension(KeyUsagesExtension)
-      if (ku) {
-        const hasDigitalSignature =
-          (ku.usages & KeyUsageFlags.digitalSignature) !== 0
-        if (!hasDigitalSignature) {
-          return { status: "invalid", root: null, chain: [] }
-        }
       }
     }
   }
@@ -269,12 +270,8 @@ export function verifyPCKChain(
   if (crls && crls.length > 0) {
     const revoked = new Set<string>()
     for (const crl of crls) {
-      try {
-        const serials = parseCrlRevokedSerials(crl)
-        for (const s of serials) revoked.add(s)
-      } catch {
-        // ignore malformed CRL
-      }
+      const serials = parseCrlRevokedSerials(crl)
+      for (const s of serials) revoked.add(s)
     }
     if (revoked.size > 0) {
       for (const cert of chain) {
