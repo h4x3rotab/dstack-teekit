@@ -46,7 +46,7 @@ test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-edgeless.bin")
+  const quote = fs.readFileSync("test/sample/tdx-v4-edgeless.dat")
 
   const { header, body } = parseTdxQuote(quote)
   const expectedMRTD =
@@ -72,7 +72,7 @@ test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-phala.bin")
+  const quote = fs.readFileSync("test/sample/tdx-v4-phala.dat")
 
   const { header, body } = parseTdxQuote(quote)
   const expectedMRTD =
@@ -123,7 +123,7 @@ test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.bin")
+  const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.dat")
 
   const { header, body } = parseTdxQuote(quote)
   const expectedMRTD = reverseHexBytes(
@@ -150,7 +150,7 @@ test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Azure", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-azure-quote", "utf-8")
+  const quote = fs.readFileSync("test/sample/tdx-v4-azure", "utf-8")
   const { header, body } = parseTdxQuoteBase64(quote)
 
   const expectedMRTD =
