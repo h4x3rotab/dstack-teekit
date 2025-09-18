@@ -1,4 +1,4 @@
-import { X509Certificate, BasicConstraintsExtension } from "./x509.js"
+import { QV_X509Certificate, BasicConstraintsExtension } from "./x509.js"
 import {
   getTdx10SignedRegion,
   getTdx15SignedRegion,
@@ -15,13 +15,13 @@ import { intelSgxRootCaPem } from "./rootCa.js"
 
 export interface VerifyConfig {
   crls: Buffer[]
-  pinnedRootCerts?: X509Certificate[]
+  pinnedRootCerts?: QV_X509Certificate[]
   date?: number
   extraCertdata?: string[]
 }
 
-export const DEFAULT_PINNED_ROOT_CERTS: X509Certificate[] = [
-  new X509Certificate(intelSgxRootCaPem),
+export const DEFAULT_PINNED_ROOT_CERTS: QV_X509Certificate[] = [
+  new QV_X509Certificate(intelSgxRootCaPem),
 ]
 
 /**
@@ -120,16 +120,16 @@ export async function verifyPCKChain(
   crls?: Buffer[],
 ): Promise<{
   status: "valid" | "invalid" | "expired" | "revoked"
-  root: X509Certificate | null
-  chain: X509Certificate[]
+  root: QV_X509Certificate | null
+  chain: QV_X509Certificate[]
 }> {
   if (certData.length === 0) return { status: "invalid", root: null, chain: [] }
 
   // Build certificate objects using @peculiar/x509
-  const certs = certData.map((pem) => new X509Certificate(pem))
+  const certs = certData.map((pem) => new QV_X509Certificate(pem))
 
   // Identify leaf (not an issuer of any other provided cert)
-  let leaf: X509Certificate | undefined
+  let leaf: QV_X509Certificate | undefined
   for (const c of certs) {
     const isParentOfAny = certs.some((other) => other.issuer === c.subject)
     if (!isParentOfAny) {
@@ -140,7 +140,7 @@ export async function verifyPCKChain(
   if (!leaf) leaf = certs[0]
 
   // Walk up by issuer -> subject
-  const chain: X509Certificate[] = [leaf]
+  const chain: QV_X509Certificate[] = [leaf]
   while (true) {
     const current = chain[chain.length - 1]
     const parent = certs.find((c) => c.subject === current.issuer)
@@ -189,9 +189,7 @@ export async function verifyPCKChain(
 
   // Additional certificate checks, based on a minimal version of RFC 5280 path extensions
   // - CA certs must assert basicConstraints.ca = true
-  // - CA certs with keyUsage must include keyCertSign
   // - End-entity leaf must assert ca = false if basicConstraints present
-  // - End-entity with keyUsage must include digitalSignature (used for ECDSA signing)
   // - Respect pathLenConstraint when present on CA certs
 
   // Determine CA flag of each cert in the path using BasicConstraints if present
@@ -206,7 +204,6 @@ export async function verifyPCKChain(
   if (bc && bc.ca) {
     return { status: "invalid", root: null, chain: [] }
   }
-  // Skip keyUsage checks for leaf due to cross-library bitstring differences
 
   // CA and pathLen checks for all issuers in the chain
   for (let i = 1; i < chain.length; i++) {
@@ -216,8 +213,6 @@ export async function verifyPCKChain(
     if (!bc || !bc.ca) {
       return { status: "invalid", root: null, chain: [] }
     }
-
-    // Skip keyUsage checks for CA nodes due to cross-library bitstring differences
 
     // pathLenConstraint validation: number of subsequent non-self-issued CA certs
     if (typeof bc.pathLength === "number") {

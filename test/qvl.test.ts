@@ -1,5 +1,5 @@
 import test from "ava"
-import { X509Certificate } from "../qvl"
+import { QV_X509Certificate } from "../qvl"
 import fs from "node:fs"
 
 import { Crypto } from "@peculiar/webcrypto"
@@ -223,7 +223,7 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
 
   t.true(
     await verifyTdx(quote, {
-      pinnedRootCerts: [new X509Certificate(root[0])],
+      pinnedRootCerts: [new QV_X509Certificate(root[0])],
       date: BASE_TIME,
       extraCertdata: certdata,
       crls,
@@ -316,7 +316,7 @@ test.serial("Verify an SGX quote from Intel, no quote signature", async (t) => {
 
   t.true(
     await verifySgx(quote, {
-      pinnedRootCerts: [new X509Certificate(root[0])],
+      pinnedRootCerts: [new QV_X509Certificate(root[0])],
       date: BASE_TIME,
       crls,
       extraCertdata: certdata,
@@ -496,7 +496,7 @@ async function getGcpCertPems(): Promise<{
   const { chain } = await verifyPCKChain(pems, null)
   const hashToPem = new Map<string, string>()
   for (const pem of pems) {
-    const h = await computeCertSha256Hex(new X509Certificate(pem))
+    const h = await computeCertSha256Hex(new QV_X509Certificate(pem))
     hashToPem.set(h, pem)
   }
   const leafPem = hashToPem.get(await computeCertSha256Hex(chain[0]))!
@@ -561,7 +561,9 @@ test.serial("Reject a V4 TDX quote, missing leaf cert", async (t) => {
 test.serial("Reject a V4 TDX quote, revoked root cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const { root } = await getGcpCertPems()
-  const rootSerial = normalizeSerialHex(new X509Certificate(root).serialNumber)
+  const rootSerial = normalizeSerialHex(
+    new QV_X509Certificate(root).serialNumber,
+  )
   const crl = buildCRLWithSerials([rootSerial])
   const err = await t.throwsAsync(
     async () =>
@@ -575,7 +577,7 @@ test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const { intermediate } = await getGcpCertPems()
   const serial = normalizeSerialHex(
-    new X509Certificate(intermediate).serialNumber,
+    new QV_X509Certificate(intermediate).serialNumber,
   )
   const crl = buildCRLWithSerials([serial])
   const err = await t.throwsAsync(
@@ -589,7 +591,7 @@ test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
 test.serial("Reject a V4 TDX quote, revoked leaf cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const { leaf } = await getGcpCertPems()
-  const serial = normalizeSerialHex(new X509Certificate(leaf).serialNumber)
+  const serial = normalizeSerialHex(new QV_X509Certificate(leaf).serialNumber)
   const crl = buildCRLWithSerials([serial])
   const err = await t.throwsAsync(
     async () =>

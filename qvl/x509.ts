@@ -1,49 +1,9 @@
 import { fromBER } from "asn1js"
-import * as asn1js from "asn1js"
-import { Certificate, BasicConstraints, setEngine, CryptoEngine } from "pkijs"
-
-// Minimal crypto provider shim to mirror @peculiar/x509 usage
-export const cryptoProvider = {
-  _crypto: globalThis.crypto as Crypto | undefined,
-  set(instance: Crypto) {
-    this._crypto = instance
-    // Ensure global WebCrypto is available for pkijs and utils
-    try {
-      // @ts-ignore
-      if (!globalThis.crypto || globalThis.crypto !== instance) {
-        // @ts-ignore
-        globalThis.crypto = instance as any
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      setEngine(
-        "custom",
-        instance as any,
-        new CryptoEngine({
-          name: "custom",
-          crypto: instance as any,
-          subtle: (instance as any).subtle,
-        }),
-      )
-    } catch {
-      // ignore
-    }
-  },
-}
-
-export enum KeyUsageFlags {
-  digitalSignature = 1 << 0,
-  nonRepudiation = 1 << 1,
-  keyEncipherment = 1 << 2,
-  dataEncipherment = 1 << 3,
-  keyAgreement = 1 << 4,
-  keyCertSign = 1 << 5,
-  cRLSign = 1 << 6,
-  encipherOnly = 1 << 7,
-  decipherOnly = 1 << 8,
-}
+import {
+  Certificate,
+  BasicConstraints,
+  RelativeDistinguishedNames,
+} from "pkijs"
 
 // Adapters to be API-compatible with previous code
 export class BasicConstraintsExtension {
@@ -52,13 +12,6 @@ export class BasicConstraintsExtension {
   constructor(ca: boolean, pathLength?: number) {
     this.ca = ca
     this.pathLength = pathLength
-  }
-}
-
-export class KeyUsagesExtension {
-  public usages: number
-  constructor(usages: number) {
-    this.usages = usages
   }
 }
 
@@ -71,9 +24,9 @@ function pemToDerBytes(pem: string): Uint8Array {
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
 }
 
-function nameToComparableString(name: any): string {
+function nameToComparableString(name: RelativeDistinguishedNames): string {
   try {
-    const parts = name.typesAndValues.map((atv: any) => {
+    const parts = name.typesAndValues.map((atv) => {
       const oid = atv.type
       const val = String(atv.value.valueBlock.value)
       return `${oid}=${val}`
@@ -84,24 +37,7 @@ function nameToComparableString(name: any): string {
   }
 }
 
-function bitArrayToUsageFlags(bitArray: asn1js.BitString): number {
-  // pkijs KeyUsage parsed as BitString in extension.value
-  const view = bitArray.valueBlock.valueHexView
-  if (!view || view.length === 0) return 0
-  // First byte(s) are bits; map to mask
-  let mask = 0
-  const bits = (view.length - 1) * 8 - (view[0] || 0)
-  for (let i = 0; i < bits; i++) {
-    const byteIndex = 1 + Math.floor(i / 8)
-    const bitIndex = 7 - (i % 8)
-    if ((view[byteIndex] >> bitIndex) & 1) {
-      mask |= 1 << i
-    }
-  }
-  return mask
-}
-
-export class X509Certificate {
+export class QV_X509Certificate {
   private _cert: Certificate
   public rawData: Uint8Array
 
@@ -146,7 +82,7 @@ export class X509Certificate {
     return { rawData: spki }
   }
 
-  async verify(issuerCert: X509Certificate): Promise<boolean> {
+  async verify(issuerCert: QV_X509Certificate): Promise<boolean> {
     try {
       // Determine hash and curve
       const sigOid = this._cert.signatureAlgorithm.algorithmId
@@ -157,7 +93,7 @@ export class X509Certificate {
       // Named curve from issuer public key
       let namedCurve: "P-256" | "P-384" | "P-521" = "P-256"
       try {
-        const params: any =
+        const params =
           issuerCert._cert.subjectPublicKeyInfo.algorithm.algorithmParams
         const curveOid = params?.valueBlock?.toString?.() || ""
         if (curveOid === "1.3.132.0.34") namedCurve = "P-384"
@@ -200,7 +136,7 @@ export class X509Certificate {
       // Fallback: convert DER -> raw (r||s)
       try {
         const asn1sig = fromBER(sigDer)
-        const seq: any = asn1sig.result
+        const seq = asn1sig.result as any
         const r: Uint8Array = new Uint8Array(
           seq.valueBlock.value[0].valueBlock.valueHex,
         )
@@ -235,17 +171,20 @@ export class X509Certificate {
   }
 
   getExtension<T>(type: new (...args: any[]) => T): T | null {
-    // Identify by class requested
-    // BasicConstraints OID 2.5.29.19, KeyUsage OID 2.5.29.15
+    // Support BasicConstraints extension
+    // OID 2.5.29.19, KeyUsage OID 2.5.29.15
     if (type === BasicConstraintsExtension) {
       const ext = this._cert.extensions?.find((e) => e.extnID === "2.5.29.19")
       if (!ext) return null
       try {
-        const parsed: any = (ext as any).parsedValue
+        const parsed = ext.parsedValue
         if (parsed) {
           const bc = parsed as BasicConstraints
           const ca = !!bc.cA
-          const pathLen = (bc as any).pathLenConstraint?.valueBlock?.valueDec
+          const pathLen =
+            typeof bc.pathLenConstraint === "number"
+              ? bc.pathLenConstraint
+              : bc.pathLenConstraint?.valueBlock?.valueDec
           return new BasicConstraintsExtension(ca, pathLen) as unknown as T
         }
         // Fallback parse
@@ -257,33 +196,11 @@ export class X509Certificate {
         )
         const bc = new BasicConstraints({ schema: fromBER(innerView).result })
         const ca = !!bc.cA
-        const pathLen = (bc as any).pathLenConstraint?.valueBlock?.valueDec
+        const pathLen =
+          typeof bc.pathLenConstraint === "number"
+            ? bc.pathLenConstraint
+            : bc.pathLenConstraint?.valueBlock?.valueDec
         return new BasicConstraintsExtension(ca, pathLen) as unknown as T
-      } catch {
-        return null
-      }
-    }
-    if (type === KeyUsagesExtension) {
-      const ext = this._cert.extensions?.find((e) => e.extnID === "2.5.29.15")
-      if (!ext) return null
-      try {
-        const parsed: any = (ext as any).parsedValue
-        const bitString: asn1js.BitString | null =
-          parsed instanceof asn1js.BitString ? parsed : null
-        if (bitString) {
-          const mask = bitArrayToUsageFlags(bitString)
-          return new KeyUsagesExtension(mask) as unknown as T
-        }
-        const view = ext.extnValue.valueBlock.valueHexView
-        const innerView = new Uint8Array(
-          view.buffer,
-          view.byteOffset,
-          view.byteLength,
-        )
-        const asn1 = fromBER(innerView)
-        const bs = asn1.result as asn1js.BitString
-        const mask = bitArrayToUsageFlags(bs)
-        return new KeyUsagesExtension(mask) as unknown as T
       } catch {
         return null
       }
@@ -291,6 +208,3 @@ export class X509Certificate {
     return null
   }
 }
-
-// Re-export classes to match import style
-// (classes are already exported above)

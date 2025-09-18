@@ -1,4 +1,4 @@
-import { X509Certificate } from "./x509.js"
+import { QV_X509Certificate } from "./x509.js"
 
 export const hex = (b: Buffer) => b.toString("hex")
 
@@ -50,7 +50,7 @@ export function extractPemCertificates(certData: Buffer): string[] {
 
 /** Compute SHA-256 of a certificate's DER bytes, lowercase hex */
 export async function computeCertSha256Hex(
-  cert: X509Certificate,
+  cert: QV_X509Certificate,
 ): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", cert.rawData.slice())
   return Buffer.from(hashBuffer).toString("hex")
