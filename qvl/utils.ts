@@ -1,6 +1,4 @@
-import { createHash, X509Certificate } from "node:crypto"
-import fs from "node:fs"
-import path from "node:path"
+import { createHash, X509Certificate } from "crypto"
 
 export const hex = (b: Buffer) => b.toString("hex")
 
@@ -53,41 +51,6 @@ export function extractPemCertificates(certData: Buffer): string[] {
 /** Compute SHA-256 of a certificate's DER bytes, lowercase hex */
 export function computeCertSha256Hex(cert: X509Certificate): string {
   return createHash("sha256").update(cert.raw).digest("hex")
-}
-
-/** Load root CA PEMs from local directory. */
-export function loadRootCerts(certsDirectory: string): X509Certificate[] {
-  const baseDir = path.resolve(certsDirectory)
-  let entries: Array<{ name: string; isFile: boolean }>
-  try {
-    const dirents = fs.readdirSync(baseDir, { withFileTypes: true })
-    entries = dirents.map((d) => ({ name: d.name, isFile: d.isFile() }))
-  } catch {
-    return []
-  }
-
-  const results: X509Certificate[] = []
-  for (const e of entries) {
-    if (!e.isFile) continue
-    const lower = e.name.toLowerCase()
-    if (
-      !lower.endsWith(".pem") &&
-      !lower.endsWith(".crt") &&
-      !lower.endsWith(".cer")
-    )
-      continue
-    try {
-      const filePath = path.join(baseDir, e.name)
-      const text = fs.readFileSync(filePath, "utf8")
-      const pems = extractPemCertificates(Buffer.from(text, "utf8"))
-      for (const pem of pems) {
-        try {
-          results.push(new X509Certificate(pem))
-        } catch {}
-      }
-    } catch {}
-  }
-  return results
 }
 
 /** Normalize a certificate serial number to uppercase hex without delimiters or leading zeros */
@@ -211,4 +174,3 @@ export function parseCrlRevokedSerials(der: Buffer): string[] {
 
   return revokedSerials
 }
-
