@@ -12,6 +12,9 @@ export default defineConfig({
       ...inject({
         Buffer: ['buffer', 'Buffer'],
         process: 'process',
+        // Avoid injecting into dependencies (e.g., React), which can
+        // convert their CJS modules into mixed ESM and break named exports
+        exclude: ['node_modules/**'],
       }),
       apply: 'build',
     },
