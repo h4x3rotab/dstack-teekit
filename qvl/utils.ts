@@ -1,7 +1,4 @@
-import { Crypto } from "@peculiar/webcrypto"
-import { X509Certificate, cryptoProvider } from "@peculiar/x509"
-
-cryptoProvider.set(new Crypto())
+import { X509Certificate } from "./x509.js"
 
 export const hex = (b: Buffer) => b.toString("hex")
 
@@ -55,7 +52,7 @@ export function extractPemCertificates(certData: Buffer): string[] {
 export async function computeCertSha256Hex(
   cert: X509Certificate,
 ): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest("SHA-256", cert.rawData)
+  const hashBuffer = await crypto.subtle.digest("SHA-256", cert.rawData.slice())
   return Buffer.from(hashBuffer).toString("hex")
 }
 

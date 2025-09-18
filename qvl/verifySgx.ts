@@ -1,8 +1,3 @@
-import { Crypto } from "@peculiar/webcrypto"
-import { cryptoProvider } from "@peculiar/x509"
-
-cryptoProvider.set(new Crypto())
-
 import { getSgxSignedRegion, parseSgxQuote } from "./structs.js"
 import {
   computeCertSha256Hex,

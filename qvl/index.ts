@@ -1,6 +1,8 @@
 export * from "./formatters.js"
 export * from "./structs.js"
+export * from "./x509.js"
 export * from "./utils.js"
+
 export * from "./verifyTdx.js"
 export * from "./verifySgx.js"
 export type * from "./verifyTdx.js"
