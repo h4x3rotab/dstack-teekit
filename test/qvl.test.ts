@@ -299,7 +299,7 @@ test.serial("Verify a V5 TDX quote from Trustee", async (t) => {
   )
 })
 
-test.serial("Verify an SGX quote from Intel", async (t) => {
+test.serial("Parse an SGX quote from Intel, no quote signature", async (t) => {
   const quote = fs.readFileSync("test/sample/sgx/quote.dat")
   const { header, body } = parseSgxQuote(quote)
 
@@ -334,7 +334,7 @@ test.serial("Verify an SGX quote from Intel", async (t) => {
     fs.readFileSync("test/sample/sgx/intermediateCaCrl.der"),
   ]
 
-  t.true(
+  t.throws(() =>
     verifySgx(quote, {
       pinnedRootCerts: [new X509Certificate(root[0])],
       date: BASE_TIME,
@@ -716,7 +716,7 @@ test.serial("Reject a V4 TDX quote, incorrect TD signature", async (t) => {
     }),
   )
   t.truthy(err)
-  t.regex(err!.message, /attestation_public_key signature/i)
+  t.regex(err!.message, /invalid signature over quote/i)
 })
 
 test.serial(

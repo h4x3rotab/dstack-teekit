@@ -3,7 +3,7 @@ import {
   createPublicKey,
   createVerify,
   X509Certificate,
-} from "node:crypto"
+} from "crypto"
 import {
   X509Certificate as ExtX509Certificate,
   BasicConstraintsExtension,
@@ -15,15 +15,11 @@ import {
   getTdx10SignedRegion,
   getTdx15SignedRegion,
   parseTdxQuote,
-  TdxQuoteV5Descriptor,
-  QuoteHeader,
-  parseSgxQuote,
 } from "./structs.js"
 import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,
   extractPemCertificates,
-  hex,
   normalizeSerialHex,
   parseCrlRevokedSerials,
   toBase64Url,
@@ -37,21 +33,9 @@ export interface VerifyConfig {
   extraCertdata?: string[]
 }
 
-const DEFAULT_PINNED_ROOT_CERTS: X509Certificate[] = [
+export const DEFAULT_PINNED_ROOT_CERTS: X509Certificate[] = [
   new X509Certificate(intelSgxRootCaPem),
 ]
-
-export function verifySgx(quote: Buffer, config?: VerifyConfig) {
-  if (
-    config !== undefined &&
-    (typeof config !== "object" || Array.isArray(config))
-  ) {
-    throw new Error("verifySgx: invalid config argument provided")
-  }
-  parseSgxQuote(quote)
-
-  throw new Error("unimplemented")
-}
 
 /**
  * Verify a complete chain of trust for a TDX enclave, including the
@@ -114,14 +98,14 @@ export function verifyTdx(quote: Buffer, config?: VerifyConfig) {
   if (signature.cert_data_type !== 5) {
     throw new Error("verifyTdx: only PCK cert_data is supported")
   }
-  if (!verifyQeReportSignature(quote, extraCertdata)) {
+  if (!verifyTdxQeReportSignature(quote, extraCertdata)) {
     throw new Error("verifyTdx: invalid qe report signature")
   }
-  if (!verifyQeReportBinding(quote)) {
+  if (!verifyTdxQeReportBinding(quote)) {
     throw new Error("verifyTdx: invalid qe report binding")
   }
   if (!verifyTdxQuoteSignature(quote)) {
-    throw new Error("verifyTdx: invalid attestation_public_key signature")
+    throw new Error("verifyTdx: invalid signature over quote")
   }
 
   return true
@@ -317,7 +301,7 @@ export function verifyPCKChain(
  * This verifies the PCK leaf certificate public key, against qe_report_signature
  * and the qe_report body (384 bytes).
  */
-export function verifyQeReportSignature(
+export function verifyTdxQeReportSignature(
   quoteInput: string | Buffer,
   extraCerts?: string[],
 ): boolean {
@@ -374,7 +358,7 @@ export function verifyQeReportSignature(
  *
  * Accept several reasonable variants to accommodate ecosystem differences.
  */
-export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
+export function verifyTdxQeReportBinding(quoteInput: string | Buffer): boolean {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
     : Buffer.from(quoteInput, "base64")
@@ -384,35 +368,26 @@ export function verifyQeReportBinding(quoteInput: string | Buffer): boolean {
     throw new Error("Unsupported quote version")
   if (!signature.qe_report_present) throw new Error("Missing QE report")
 
-  const pubRaw = signature.attestation_public_key
-  const pubUncompressed = Buffer.concat([Buffer.from([0x04]), pubRaw])
-
-  const candidates: Buffer[] = []
-  candidates.push(createHash("sha256").update(pubUncompressed).digest())
-  candidates.push(
-    createHash("sha256").update(pubRaw).update(signature.qe_auth_data).digest(),
-  )
-  // // Other ways attestation_public_key may be hashed:
-  // candidates.push(createHash("sha256").update(pubRaw).digest())
-  // candidates.push(
-  //   createHash("sha256")
-  //     .update(pubUncompressed)
-  //     .update(signature.qe_auth_data)
-  //     .digest(),
-  // )
+  const hashedPubkey = createHash("sha256")
+    .update(signature.attestation_public_key)
+    .update(signature.qe_auth_data)
+    .digest()
+  const hashedUncompressedPubkey = createHash("sha256")
+    .update(
+      Buffer.concat([Buffer.from([0x04]), signature.attestation_public_key]),
+    )
+    .update(signature.qe_auth_data)
+    .digest()
 
   // QE report is 384 bytes; report_data occupies the last 64 bytes (offset 320).
   // The attestation_public_key should be embedded in the first half.
   const reportData = signature.qe_report.subarray(320, 384)
-  const first = reportData.subarray(0, 32)
+  const reportDataEmbed = reportData.subarray(0, 32)
 
-  for (const digest of candidates) {
-    if (digest.equals(first)) {
-      return true
-    }
-  }
-
-  return false
+  return (
+    hashedPubkey.equals(reportDataEmbed) ||
+    hashedUncompressedPubkey.equals(reportDataEmbed)
+  )
 }
 
 /**

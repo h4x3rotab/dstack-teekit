@@ -107,15 +107,15 @@ export function parseSgxSignature(quote: Buffer) {
   const EcdsaSignatureFixed = new Struct("EcdsaSignatureFixed")
     .Buffer("signature", 64)
     .Buffer("attestation_public_key", 64)
-    .Struct("qe_report", SgxReportBody)
+    .Buffer("qe_report", 384)
     .Buffer("qe_report_signature", 64)
     .UInt16LE("qe_auth_data_len")
     .Buffer("extra")
     .compile()
   const fixed = new EcdsaSignatureFixed(sig_data)
 
-  const qe_auth_data = fixed.extra.slice(fixed.qe_auth_data_len)
-  const { cert_data_type, cert_data_len, cert_data } = new SgxTail(qe_auth_data)
+  const tail = fixed.extra.subarray(fixed.qe_auth_data_len)
+  const { cert_data_type, cert_data_len, cert_data } = new SgxTail(tail)
 
   return {
     ecdsa_signature: fixed.signature,
@@ -124,10 +124,10 @@ export function parseSgxSignature(quote: Buffer) {
     qe_report_present: !!fixed.qe_report,
     qe_report_signature: fixed.qe_report_signature,
     qe_auth_data_len: fixed.qe_auth_data_len,
-    qe_auth_data,
+    qe_auth_data: fixed.extra.subarray(0, fixed.qe_auth_data_len),
     cert_data_type,
     cert_data_len,
-    cert_data: cert_data.slice(0, cert_data_len),
+    cert_data: cert_data.subarray(0, cert_data_len),
   }
 }
 
@@ -142,7 +142,7 @@ export function parseTdxSignature(quote: Buffer, v5?: boolean) {
     sig_data = new TdxQuoteV4(quote).sig_data
   } else {
     const { body_size, extra } = new TdxQuoteV5Descriptor(quote)
-    sig_data = new TdxQuoteV5SigDescriptor(extra.slice(body_size)).sig_data
+    sig_data = new TdxQuoteV5SigDescriptor(extra.subarray(body_size)).sig_data
   }
 
   const EcdsaSigFixed = new Struct("EcdsaSigFixed")
@@ -158,7 +158,10 @@ export function parseTdxSignature(quote: Buffer, v5?: boolean) {
   const fixed = new EcdsaSigFixed(sig_data)
   let offset = EcdsaSigFixed.baseSize
 
-  const qe_auth_data = sig_data.slice(offset, offset + fixed.qe_auth_data_len)
+  const qe_auth_data = sig_data.subarray(
+    offset,
+    offset + fixed.qe_auth_data_len,
+  )
   offset += fixed.qe_auth_data_len
 
   const Tail = new Struct("Tail")
@@ -167,14 +170,14 @@ export function parseTdxSignature(quote: Buffer, v5?: boolean) {
     .compile()
 
   const { cert_data_type, cert_data_len } = new Tail(
-    sig_data.slice(offset, offset + Tail.baseSize),
+    sig_data.subarray(offset, offset + Tail.baseSize),
   )
   offset += Tail.baseSize
 
   const CertData = new Struct("CertData")
     .Buffer("cert_data", cert_data_len)
     .compile()
-  const { cert_data } = new CertData(sig_data.slice(offset))
+  const { cert_data } = new CertData(sig_data.subarray(offset))
 
   return {
     ecdsa_signature: fixed.signature,
@@ -233,9 +236,9 @@ export function parseTdxQuote(quote: Buffer): {
     if (body_type === 1) {
       throw new Error("parseQuote: unexpected body_type = 1")
     } else if (body_type === 2) {
-      body = new TdxQuoteBody_1_0(extra.slice(0, body_size))
+      body = new TdxQuoteBody_1_0(extra.subarray(0, body_size))
     } else if (body_type === 3) {
-      body = new TdxQuoteBody_1_5(extra.slice(0, body_size))
+      body = new TdxQuoteBody_1_5(extra.subarray(0, body_size))
     } else {
       throw new Error("parseQuote: unexpected body_type")
     }
@@ -268,6 +271,7 @@ export function parseSgxQuote(quote: Buffer): {
 
   const { body } = new SgxQuote(quote)
   const signature = parseSgxSignature(quote)
+
   return { header, body, signature }
 }
 
