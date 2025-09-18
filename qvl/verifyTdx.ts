@@ -7,11 +7,7 @@ import {
   cryptoProvider,
 } from "@peculiar/x509"
 
-const webCrypto =
-  globalThis.crypto && globalThis.crypto.subtle
-    ? globalThis.crypto
-    : new Crypto()
-cryptoProvider.set(webCrypto as any)
+cryptoProvider.set(new Crypto())
 
 import {
   getTdx10SignedRegion,
@@ -182,27 +178,21 @@ export async function verifyPCKChain(
     }
   }
 
-  // Cryptographically verify signatures along the chain: each child signed by its parent
-  for (let i = 0; i < chain.length - 1; i++) {
-    const child = chain[i]
-    const parent = chain[i + 1]
-    try {
-      if (!(await child.verify(parent))) {
-        return { status: "invalid", root: null, chain: [] }
-      }
-    } catch {
+  // If the terminal certificate is self-signed, verify its signature
+  const terminal = chain[chain.length - 1]
+  if (terminal && terminal.subject === terminal.issuer) {
+    const valid = await terminal.verify(terminal)
+    if (!valid) {
       return { status: "invalid", root: null, chain: [] }
     }
   }
 
-  // If the terminal certificate is self-signed, verify its signature as well
-  const terminal = chain[chain.length - 1]
-  if (terminal && terminal.subject === terminal.issuer) {
-    try {
-      if (!(await terminal.verify(terminal))) {
-        return { status: "invalid", root: null, chain: [] }
-      }
-    } catch {
+  // Cryptographically verify signatures along the chain: each child signed by its parent
+  for (let i = 0; i < chain.length - 1; i++) {
+    const child = chain[i]
+    const parent = chain[i + 1]
+    const valid = await child.verify(parent)
+    if (!valid) {
       return { status: "invalid", root: null, chain: [] }
     }
   }

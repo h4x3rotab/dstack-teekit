@@ -1,11 +1,7 @@
 import { Crypto } from "@peculiar/webcrypto"
 import { cryptoProvider } from "@peculiar/x509"
 
-const webCrypto =
-  globalThis.crypto && globalThis.crypto.subtle
-    ? globalThis.crypto
-    : new Crypto()
-cryptoProvider.set(webCrypto as any)
+cryptoProvider.set(new Crypto())
 
 import { getSgxSignedRegion, parseSgxQuote } from "./structs.js"
 import {
