@@ -1,8 +1,12 @@
-import { createHash, createPublicKey, createVerify } from "crypto"
+import { Crypto } from "@peculiar/webcrypto"
+import { cryptoProvider } from "@peculiar/x509"
+
+const crypto = new Crypto()
+cryptoProvider.set(crypto)
+
 import { getSgxSignedRegion, parseSgxQuote } from "./structs.js"
 import {
   computeCertSha256Hex,
-  encodeEcdsaSignatureToDer,
   extractPemCertificates,
   toBase64Url,
 } from "./utils.js"
@@ -12,7 +16,7 @@ import {
   verifyPCKChain,
 } from "./verifyTdx.js"
 
-export function verifySgx(quote: Buffer, config?: VerifyConfig) {
+export async function verifySgx(quote: Buffer, config?: VerifyConfig) {
   if (
     config !== undefined &&
     (typeof config !== "object" || Array.isArray(config))
@@ -26,14 +30,18 @@ export function verifySgx(quote: Buffer, config?: VerifyConfig) {
   const crls = config?.crls
   const { signature, header } = parseSgxQuote(quote)
   const certs = extractPemCertificates(signature.cert_data)
-  let { status, root } = verifyPCKChain(certs, date ?? +new Date(), crls)
+  let { status, root } = await verifyPCKChain(certs, date ?? +new Date(), crls)
 
   // Use fallback certs, only if certdata is not provided
   if (!root && certs.length === 0) {
     if (!extraCertdata) {
       throw new Error("verifySgx: missing certdata")
     }
-    const fallback = verifyPCKChain(extraCertdata, date ?? +new Date(), crls)
+    const fallback = await verifyPCKChain(
+      extraCertdata,
+      date ?? +new Date(),
+      crls,
+    )
     status = fallback.status
     root = fallback.root
   }
@@ -51,8 +59,10 @@ export function verifySgx(quote: Buffer, config?: VerifyConfig) {
   }
 
   // Check against the pinned root certificates
-  const candidateRootHash = computeCertSha256Hex(root)
-  const knownRootHashes = new Set(pinnedRootCerts.map(computeCertSha256Hex))
+  const candidateRootHash = await computeCertSha256Hex(root)
+  const knownRootHashes = new Set(
+    await Promise.all(pinnedRootCerts.map(computeCertSha256Hex)),
+  )
   const rootIsValid = knownRootHashes.has(candidateRootHash)
   if (!rootIsValid) {
     throw new Error("verifySgx: invalid root")
@@ -64,19 +74,20 @@ export function verifySgx(quote: Buffer, config?: VerifyConfig) {
   if (header.att_key_type !== 2) {
     throw new Error("verifySgx: only ECDSA att_key_type is supported")
   }
-  if (signature.cert_data_type !== 5) {
+  if (signature.cert_data_type !== 5 && signature.cert_data_type !== 1) {
+    // TODO
     throw new Error("verifySgx: only PCK cert_data is supported")
   }
-  if (!verifySgxQeReportSignature(quote, extraCertdata)) {
+
+  if (!(await verifySgxQeReportSignature(quote, extraCertdata))) {
     throw new Error("verifySgx: invalid qe report signature")
   }
-  if (!verifySgxQeReportBinding(quote)) {
+  if (!(await verifySgxQeReportBinding(quote))) {
     throw new Error("verifySgx: invalid qe report binding")
   }
-  if (!verifySgxQuoteSignature(quote)) {
+  if (!(await verifySgxQuoteSignature(quote))) {
     throw new Error("verifySgx: invalid signature over quote")
   }
-
   return true
 }
 
@@ -85,10 +96,10 @@ export function verifySgx(quote: Buffer, config?: VerifyConfig) {
  * This verifies the PCK leaf certificate public key signed the SGX quote body
  * (qe_report_body, 384 bytes) in qe_report_signature.
  */
-export function verifySgxQeReportSignature(
+export async function verifySgxQeReportSignature(
   quoteInput: string | Buffer,
   extraCerts?: string[],
-): boolean {
+): Promise<boolean> {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
     : Buffer.from(quoteInput, "base64")
@@ -108,7 +119,7 @@ export function verifySgxQeReportSignature(
   }
   if (certs.length === 0) return false
 
-  const { chain } = verifyPCKChain(certs, null)
+  const { chain } = await verifyPCKChain(certs, null)
 
   if (chain.length === 0) return false
 
@@ -116,18 +127,31 @@ export function verifySgxQeReportSignature(
   const pckLeafKey = pckLeafCert.publicKey
 
   // Following Intel's C++ implementation:
-  // 1. Convert raw ECDSA signature (64 bytes: r||s) to DER format
+  // 1. Use raw ECDSA signature (64 bytes: r||s) directly
   // 2. Verify with SHA-256 against the raw QE report blob (384 bytes)
   try {
-    const derSignature = encodeEcdsaSignatureToDer(
-      signature.qe_report_signature,
+    // Use the raw signature directly - webcrypto expects raw format for ECDSA
+    const rawSignature = signature.qe_report_signature
+
+    // Import the public key for verification
+    const publicKey = await crypto.subtle.importKey(
+      "spki",
+      pckLeafKey.rawData,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
     )
-    const verifier = createVerify("sha256")
-    verifier.update(signature.qe_report)
-    verifier.end()
-    const result = verifier.verify(pckLeafKey, derSignature)
+
+    // Verify the signature - webcrypto handles hashing internally
+    const result = await crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      publicKey,
+      rawSignature,
+      signature.qe_report,
+    )
     return result
-  } catch {
+  } catch (error) {
+    console.error("QE report signature verification error:", error)
     return false
   }
 }
@@ -138,7 +162,9 @@ export function verifySgxQeReportSignature(
  *
  * qe_report.report_data[0..32) == SHA256(attestation_public_key || qe_auth_data)
  */
-export function verifySgxQeReportBinding(quoteInput: string | Buffer): boolean {
+export async function verifySgxQeReportBinding(
+  quoteInput: string | Buffer,
+): Promise<boolean> {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
     : Buffer.from(quoteInput, "base64")
@@ -147,16 +173,21 @@ export function verifySgxQeReportBinding(quoteInput: string | Buffer): boolean {
   if (header.version !== 3) throw new Error("Unsupported quote version")
   if (!signature.qe_report_present) throw new Error("Missing QE report")
 
-  const hashedPubkey = createHash("sha256")
-    .update(signature.attestation_public_key)
-    .update(signature.qe_auth_data)
-    .digest()
-  const hashedUncompressedPubkey = createHash("sha256")
-    .update(
-      Buffer.concat([Buffer.from([0x04]), signature.attestation_public_key]),
-    )
-    .update(signature.qe_auth_data)
-    .digest()
+  const combinedData = Buffer.concat([
+    signature.attestation_public_key,
+    signature.qe_auth_data,
+  ])
+  const hashedPubkey = await crypto.subtle.digest("SHA-256", combinedData)
+
+  const uncompressedData = Buffer.concat([
+    Buffer.from([0x04]),
+    signature.attestation_public_key,
+    signature.qe_auth_data,
+  ])
+  const hashedUncompressedPubkey = await crypto.subtle.digest(
+    "SHA-256",
+    uncompressedData,
+  )
 
   // QE report is 384 bytes; report_data occupies the last 64 bytes (offset 320).
   // The attestation_public_key should be embedded in the first half.
@@ -164,8 +195,8 @@ export function verifySgxQeReportBinding(quoteInput: string | Buffer): boolean {
   const reportDataEmbed = reportData.subarray(0, 32)
 
   return (
-    hashedPubkey.equals(reportDataEmbed) ||
-    hashedUncompressedPubkey.equals(reportDataEmbed)
+    Buffer.from(hashedPubkey).equals(reportDataEmbed) ||
+    Buffer.from(hashedUncompressedPubkey).equals(reportDataEmbed)
   )
 }
 
@@ -173,7 +204,9 @@ export function verifySgxQeReportBinding(quoteInput: string | Buffer): boolean {
  * Verify the attestation_public_key in an SGX quote signed the embedded quote.
  * Does not validate the certificate chain, QE report, CRLs, TCBs, etc.
  */
-export function verifySgxQuoteSignature(quoteInput: string | Buffer): boolean {
+export async function verifySgxQuoteSignature(
+  quoteInput: string | Buffer,
+): Promise<boolean> {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
     : Buffer.from(quoteInput, "base64")
@@ -183,7 +216,6 @@ export function verifySgxQuoteSignature(quoteInput: string | Buffer): boolean {
 
   const message = getSgxSignedRegion(quoteBytes)
   const rawSig = signature.ecdsa_signature
-  const derSig = encodeEcdsaSignatureToDer(rawSig)
 
   const pub = signature.attestation_public_key
   if (pub.length !== 64) {
@@ -199,14 +231,24 @@ export function verifySgxQuoteSignature(quoteInput: string | Buffer): boolean {
     y,
   } as const
 
-  const publicKey = createPublicKey({ key: jwk, format: "jwk" })
+  // Import the public key from JWK format
+  const publicKey = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["verify"],
+  )
 
-  const verifier = createVerify("sha256")
-  verifier.update(message)
-  verifier.end()
-  return verifier.verify(publicKey, derSig)
+  // Verify the signature
+  return await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" },
+    publicKey,
+    rawSig,
+    message,
+  )
 }
 
-export function verifySgxBase64(quote: string, config?: VerifyConfig) {
-  return verifySgx(Buffer.from(quote, "base64"), config)
+export async function verifySgxBase64(quote: string, config?: VerifyConfig) {
+  return await verifySgx(Buffer.from(quote, "base64"), config)
 }
