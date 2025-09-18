@@ -13,7 +13,7 @@ export default defineConfig({
         Buffer: ["buffer", "Buffer"],
         process: "process",
         // Don't inject into React to avoid breaking named exports
-        include: ["node_modules/react/**", "node_modules/react-dom/**"],
+        exclude: ["node_modules/react/**", "node_modules/react-dom/**"],
       }),
       apply: "build",
     },
