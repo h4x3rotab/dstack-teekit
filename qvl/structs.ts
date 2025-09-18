@@ -199,6 +199,13 @@ export type TdxSignature = ReturnType<typeof parseTdxSignature>
 /**
  * Compute the signed region of a TDX 1.0 quote: header || body (excludes sig length and sig_data)
  */
+export function getSgxSignedRegion(quoteBytes: Buffer): Buffer {
+  return quoteBytes.subarray(0, QuoteHeader.baseSize + SgxReportBody.baseSize)
+}
+
+/**
+ * Compute the signed region of a TDX 1.0 quote: header || body (excludes sig length and sig_data)
+ */
 export function getTdx10SignedRegion(quoteBytes: Buffer): Buffer {
   const headerLen = QuoteHeader.baseSize as number
   const bodyLen = TdxQuoteBody_1_0.baseSize as number

@@ -1,5 +1,10 @@
 import { createHash, createPublicKey, createVerify } from "crypto"
-import { parseSgxQuote, QuoteHeader, SgxReportBody } from "./structs.js"
+import {
+  getSgxSignedRegion,
+  parseSgxQuote,
+  QuoteHeader,
+  SgxReportBody,
+} from "./structs.js"
 import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,
@@ -64,7 +69,7 @@ export function verifySgx(quote: Buffer, config?: VerifyConfig) {
   if (header.att_key_type !== 2) {
     throw new Error("verifySgx: only ECDSA att_key_type is supported")
   }
-  if (signature.cert_data_type !== 1) {
+  if (signature.cert_data_type !== 5) {
     throw new Error("verifySgx: only PCK cert_data is supported")
   }
   if (!verifySgxQeReportSignature(quote, extraCertdata)) {
@@ -171,7 +176,7 @@ export function verifySgxQeReportBinding(quoteInput: string | Buffer): boolean {
 
 /**
  * Verify the attestation_public_key in an SGX quote signed the embedded quote.
- * Does not validate the certificate chain or QE report.
+ * Does not validate the certificate chain, QE report, CRLs, TCBs, etc.
  */
 export function verifySgxQuoteSignature(quoteInput: string | Buffer): boolean {
   const quoteBytes = Buffer.isBuffer(quoteInput)
@@ -181,10 +186,7 @@ export function verifySgxQuoteSignature(quoteInput: string | Buffer): boolean {
   const { header, signature } = parseSgxQuote(quoteBytes)
   if (header.version !== 3) throw new Error(`Unsupported quote version`)
 
-  const message = quoteBytes.subarray(
-    0,
-    QuoteHeader.baseSize + SgxReportBody.baseSize,
-  )
+  const message = getSgxSignedRegion(quoteBytes)
   const rawSig = signature.ecdsa_signature
   const derSig = encodeEcdsaSignatureToDer(rawSig)
 

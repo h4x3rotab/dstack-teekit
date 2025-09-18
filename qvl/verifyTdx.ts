@@ -391,9 +391,9 @@ export function verifyTdxQeReportBinding(quoteInput: string | Buffer): boolean {
 }
 
 /**
- * Verify the ECDSA-P256 signature inside a TDX v4 quote against the embedded
- * attestation public key. This checks only the quote signature itself and does
- * not validate the certificate chain or QE report.
+ * Verify the attestation_public_key in a TDX quote signed the embedded header/body
+ * with a ECDSA-P256 signature. This checks only the quote signature itself and
+ * does not validate the certificate chain, QE report, CRLs, TCBs, etc.
  */
 export function verifyTdxQuoteSignature(quoteInput: string | Buffer): boolean {
   const quoteBytes = Buffer.isBuffer(quoteInput)
@@ -402,15 +402,13 @@ export function verifyTdxQuoteSignature(quoteInput: string | Buffer): boolean {
 
   const { header, signature } = parseTdxQuote(quoteBytes)
 
-  if (header.version !== 4 && header.version !== 5) {
-    throw new Error(`Unsupported TDX quote version: ${header.version}`)
-  }
-
   let message
   if (header.version === 4) {
     message = getTdx10SignedRegion(quoteBytes)
-  } else {
+  } else if (header.version === 5) {
     message = getTdx15SignedRegion(quoteBytes)
+  } else {
+    throw new Error(`Unsupported TDX quote version: ${header.version}`)
   }
 
   const rawSig = signature.ecdsa_signature

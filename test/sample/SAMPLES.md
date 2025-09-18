@@ -7,4 +7,7 @@ Quote samples are sourced from:
 - https://github.com/confidential-containers/trustee
 
 tdx-v4-gcp.json is obtained from Google Cloud following instructions
+in qvl/ATTESTATION-GCP.md.
+
+tdx-v4-azure is obtained from Azure following instructions
 in qvl/ATTESTATION.md.
