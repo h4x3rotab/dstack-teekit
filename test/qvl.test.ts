@@ -37,12 +37,7 @@ test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
@@ -62,13 +57,7 @@ test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
@@ -88,12 +77,7 @@ test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
@@ -114,12 +98,7 @@ test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
@@ -141,12 +120,7 @@ test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from Azure", async (t) => {
@@ -166,12 +140,7 @@ test.serial("Verify a V4 TDX quote from Azure", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdxBase64(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdxBase64(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
@@ -191,12 +160,27 @@ test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+})
+
+test.serial("Verify a V4 TDX quote from ZKDCAP", async (t) => {
+  const quote = fs.readFileSync("test/sample/tdx-v4-zkdcap.dat")
+  const { header, body } = parseTdxQuote(quote)
+
+  const expectedMRTD =
+    "935be7742dd89c6a4df6dba8353d89041ae0f052beef993b1e7f4524d3bc57650df20e5582158352e1240b3f1fed55d8"
+  const expectedReportData =
+    "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
+  t.is(header.version, 4)
+  t.is(header.tee_type, 129)
+  t.is(hex(body.mr_td), expectedMRTD)
+  t.is(hex(body.report_data), expectedReportData)
+  t.deepEqual(body.mr_config_id, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner, Buffer.alloc(48))
+  t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
+
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V4 TDX quote from Intel", async (t) => {
@@ -264,12 +248,7 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdxBase64(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdxBase64(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Verify a V5 TDX quote from Trustee", async (t) => {
@@ -289,12 +268,7 @@ test.serial("Verify a V5 TDX quote from Trustee", async (t) => {
   t.deepEqual(body.mr_owner, Buffer.alloc(48))
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
 
-  t.true(
-    verifyTdx(quote, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  t.true(verifyTdx(quote, { date: BASE_TIME, crls: [] }))
 })
 
 test.serial("Parse an SGX quote from Intel, no quote signature", async (t) => {
@@ -514,10 +488,7 @@ test.serial("Reject a V4 TDX quote, revoked root cert", async (t) => {
     .replace(/^0+(?=[0-9A-F])/g, "")
   const crl = buildCRLWithSerials([rootSerial])
   const err = t.throws(() =>
-    verifyTdxBase64(quoteB64, {
-      date: BASE_TIME,
-      crls: [crl],
-    }),
+    verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
   )
   t.truthy(err)
   t.regex(err!.message, /revoked certificate in cert chain/i)
@@ -532,10 +503,7 @@ test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
     .replace(/^0+(?=[0-9A-F])/g, "")
   const crl = buildCRLWithSerials([serial])
   const err = t.throws(() =>
-    verifyTdxBase64(quoteB64, {
-      date: BASE_TIME,
-      crls: [crl],
-    }),
+    verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
   )
   t.truthy(err)
   t.regex(err!.message, /revoked certificate in cert chain/i)
@@ -550,10 +518,7 @@ test.serial("Reject a V4 TDX quote, revoked leaf cert", async (t) => {
     .replace(/^0+(?=[0-9A-F])/g, "")
   const crl = buildCRLWithSerials([serial])
   const err = t.throws(() =>
-    verifyTdxBase64(quoteB64, {
-      date: BASE_TIME,
-      crls: [crl],
-    }),
+    verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
   )
   t.truthy(err)
   t.regex(err!.message, /revoked certificate in cert chain/i)
@@ -634,12 +599,7 @@ test.serial("Reject a V4 TDX quote, incorrect QE signature", async (t) => {
     ),
     sigData,
   ])
-  const err = t.throws(() =>
-    verifyTdx(mutated, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  const err = t.throws(() => verifyTdx(mutated, { date: BASE_TIME, crls: [] }))
   t.truthy(err)
   t.regex(err!.message, /invalid qe report signature/i)
 })
@@ -665,12 +625,7 @@ test.serial("Reject a V4 TDX quote, incorrect QE binding", async (t) => {
     ),
     sigData,
   ])
-  const err = t.throws(() =>
-    verifyTdx(mutated, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  const err = t.throws(() => verifyTdx(mutated, { date: BASE_TIME, crls: [] }))
   t.truthy(err)
   t.regex(err!.message, /invalid qe report binding/i)
 })
@@ -696,12 +651,7 @@ test.serial("Reject a V4 TDX quote, incorrect TD signature", async (t) => {
     ),
     sigData,
   ])
-  const err = t.throws(() =>
-    verifyTdx(mutated, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  const err = t.throws(() => verifyTdx(mutated, { date: BASE_TIME, crls: [] }))
   t.truthy(err)
   t.regex(err!.message, /invalid signature over quote/i)
 })
@@ -713,10 +663,7 @@ test.serial(
     const base = Buffer.from(quoteB64, "base64")
     const noEmbedded = rebuildQuoteWithCertData(base, Buffer.alloc(0))
     const err = t.throws(() =>
-      verifyTdx(noEmbedded, {
-        date: BASE_TIME,
-        crls: [],
-      }),
+      verifyTdx(noEmbedded, { date: BASE_TIME, crls: [] }),
     )
     t.truthy(err)
     t.regex(err!.message, /missing certdata/i)
@@ -727,12 +674,7 @@ test.serial(
   "Reject a V4 TDX quote, expired or not-yet-valid certificate chain",
   async (t) => {
     const quoteB64 = getGcpQuoteBase64()
-    const err = t.throws(() =>
-      verifyTdxBase64(quoteB64, {
-        date: 0,
-        crls: [],
-      }),
-    )
+    const err = t.throws(() => verifyTdxBase64(quoteB64, { date: 0, crls: [] }))
     t.truthy(err)
     t.regex(err!.message, /expired cert chain/i)
   },
@@ -744,12 +686,7 @@ test.serial("Reject a V4 TDX quote, unsupported TEE type", async (t) => {
   const mutated = Buffer.from(original)
   // header.tee_type at offset 4 (UInt32LE)
   mutated.writeUInt32LE(0, 4)
-  const err = t.throws(() =>
-    verifyTdx(mutated, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  const err = t.throws(() => verifyTdx(mutated, { date: BASE_TIME, crls: [] }))
   t.truthy(err)
   t.regex(err!.message, /only tdx is supported/i)
 })
@@ -763,10 +700,7 @@ test.serial(
     // header.att_key_type at offset 2 (UInt16LE)
     mutated.writeUInt16LE(1, 2)
     const err = t.throws(() =>
-      verifyTdx(mutated, {
-        date: BASE_TIME,
-        crls: [],
-      }),
+      verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
     )
     t.truthy(err)
     t.regex(err!.message, /only ECDSA att_key_type is supported/i)
@@ -837,12 +771,7 @@ test.serial("Reject a TDX quote with unsupported version", async (t) => {
   const mutated = Buffer.from(original)
   // header.version at offset 0 (UInt16LE)
   mutated.writeUInt16LE(6, 0)
-  const err = t.throws(() =>
-    verifyTdx(mutated, {
-      date: BASE_TIME,
-      crls: [],
-    }),
-  )
+  const err = t.throws(() => verifyTdx(mutated, { date: BASE_TIME, crls: [] }))
   t.truthy(err)
   t.regex(err!.message, /Unsupported quote version/i)
 })
