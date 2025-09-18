@@ -4,6 +4,7 @@ import {
   BasicConstraints,
   RelativeDistinguishedNames,
 } from "pkijs"
+import { base64 as scureBase64, hex as scureHex } from "@scure/base"
 
 // Adapters to be API-compatible with previous code
 export class BasicConstraintsExtension {
@@ -20,8 +21,7 @@ function pemToDerBytes(pem: string): Uint8Array {
     .replace(/-----BEGIN CERTIFICATE-----/g, "")
     .replace(/-----END CERTIFICATE-----/g, "")
     .replace(/\s+/g, "")
-  const buf = Buffer.from(b64, "base64")
-  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+  return scureBase64.decode(b64)
 }
 
 function nameToComparableString(name: RelativeDistinguishedNames): string {
@@ -62,10 +62,9 @@ export class QV_X509Certificate {
 
   get serialNumber(): string {
     // Uppercase hex without leading 0x
-    const hex = Buffer.from(
-      this._cert.serialNumber.valueBlock.valueHexView,
-    ).toString("hex")
-    return hex.toUpperCase()
+    const value = this._cert.serialNumber.valueBlock.valueHexView
+    const s = scureHex.encode(value)
+    return s.toUpperCase()
   }
 
   get notBefore(): Date {

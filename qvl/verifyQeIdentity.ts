@@ -1,4 +1,5 @@
 import { parseTdxQuote } from "./structs.js"
+import { base64 as scureBase64, hex as scureHex } from "@scure/base"
 
 type QeIdentity = {
   enclaveIdentity: {
@@ -24,22 +25,27 @@ type QeIdentity = {
 }
 
 /** Minimal view of SGX Report fields inside QE report */
-function parseSgxReport(report: Buffer) {
+function parseSgxReport(report: Uint8Array) {
   if (report.length !== 384) {
     throw new Error("Unexpected SGX report length")
   }
   const attributes = report.subarray(48, 64)
   const mrEnclave = report.subarray(64, 96)
   const mrSigner = report.subarray(128, 160)
-  const isvProdId = report.readUInt16LE(256)
-  const isvSvn = report.readUInt16LE(258)
+  const view = new DataView(report.buffer, report.byteOffset, report.byteLength)
+  const isvProdId = view.getUint16(256, true)
+  const isvSvn = view.getUint16(258, true)
   const reportData = report.subarray(320, 384)
   return { attributes, mrEnclave, mrSigner, isvProdId, isvSvn, reportData }
 }
 
-function hexEqualsMasked(actual: Buffer, expectedHex: string, maskHex: string) {
-  const exp = Buffer.from(expectedHex, "hex")
-  const mask = Buffer.from(maskHex, "hex")
+function hexEqualsMasked(
+  actual: Uint8Array,
+  expectedHex: string,
+  maskHex: string,
+) {
+  const exp = scureHex.decode(expectedHex)
+  const mask = scureHex.decode(maskHex)
   if (exp.length !== actual.length || mask.length !== actual.length)
     return false
   for (let i = 0; i < actual.length; i++) {
@@ -57,7 +63,7 @@ export function verifyQeIdentity(
   const now = atTimeMs ?? Date.now()
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
-    : Buffer.from(quoteInput, "base64")
+    : Buffer.from(scureBase64.decode(quoteInput))
 
   const { signature } = parseTdxQuote(quoteBytes)
   if (!signature.qe_report_present) return false
@@ -74,7 +80,9 @@ export function verifyQeIdentity(
   }
 
   // MRSIGNER must match exactly
-  if (report.mrSigner.toString("hex") !== id.mrsigner.toLowerCase()) {
+  if (
+    scureHex.encode(report.mrSigner).toLowerCase() !== id.mrsigner.toLowerCase()
+  ) {
     return false
   }
 

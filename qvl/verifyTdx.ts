@@ -10,8 +10,11 @@ import {
   normalizeSerialHex,
   parseCrlRevokedSerials,
   toBase64Url,
+  concatBytes,
+  bytesEqual,
 } from "./utils.js"
 import { intelSgxRootCaPem } from "./rootCa.js"
+import { base64 as scureBase64 } from "@scure/base"
 
 export interface VerifyConfig {
   crls: Buffer[]
@@ -105,7 +108,7 @@ export async function verifyTdx(quote: Buffer, config?: VerifyConfig) {
 }
 
 export async function verifyTdxBase64(quote: string, config?: VerifyConfig) {
-  return await verifyTdx(Buffer.from(quote, "base64"), config)
+  return await verifyTdx(Buffer.from(scureBase64.decode(quote)), config)
 }
 
 /**
@@ -258,7 +261,7 @@ export async function verifyTdxQeReportSignature(
 ): Promise<boolean> {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
-    : Buffer.from(quoteInput, "base64")
+    : Buffer.from(scureBase64.decode(quoteInput))
 
   const { header, signature } = parseTdxQuote(quoteBytes)
   if (header.version !== 4 && header.version !== 5)
@@ -327,21 +330,21 @@ export async function verifyTdxQeReportBinding(
 ): Promise<boolean> {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
-    : Buffer.from(quoteInput, "base64")
+    : Buffer.from(scureBase64.decode(quoteInput))
 
   const { header, signature } = parseTdxQuote(quoteBytes)
   if (header.version !== 4 && header.version !== 5)
     throw new Error("Unsupported quote version")
   if (!signature.qe_report_present) throw new Error("Missing QE report")
 
-  const combinedData = Buffer.concat([
+  const combinedData = concatBytes([
     signature.attestation_public_key,
     signature.qe_auth_data,
   ])
   const hashedPubkey = await crypto.subtle.digest("SHA-256", combinedData)
 
-  const uncompressedData = Buffer.concat([
-    Buffer.from([0x04]),
+  const uncompressedData = concatBytes([
+    new Uint8Array([0x04]),
     signature.attestation_public_key,
     signature.qe_auth_data,
   ])
@@ -356,8 +359,8 @@ export async function verifyTdxQeReportBinding(
   const reportDataEmbed = reportData.subarray(0, 32)
 
   return (
-    Buffer.from(hashedPubkey).equals(reportDataEmbed) ||
-    Buffer.from(hashedUncompressedPubkey).equals(reportDataEmbed)
+    bytesEqual(new Uint8Array(hashedPubkey), reportDataEmbed) ||
+    bytesEqual(new Uint8Array(hashedUncompressedPubkey), reportDataEmbed)
   )
 }
 
@@ -371,7 +374,7 @@ export async function verifyTdxQuoteSignature(
 ): Promise<boolean> {
   const quoteBytes = Buffer.isBuffer(quoteInput)
     ? quoteInput
-    : Buffer.from(quoteInput, "base64")
+    : Buffer.from(scureBase64.decode(quoteInput))
 
   const { header, signature } = parseTdxQuote(quoteBytes)
 

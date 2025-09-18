@@ -1,13 +1,18 @@
 import { QV_X509Certificate } from "./x509.js"
+import { base64url as scureBase64Url, hex as scureHex } from "@scure/base"
 
-export const hex = (b: Buffer) => b.toString("hex")
+export const hex = (b: Uint8Array) => scureHex.encode(b)
 
 export const reverseHexBytes = (h: string) => {
-  return Buffer.from(h, "hex").reverse().toString("hex")
+  const arr = scureHex.decode(h)
+  Array.prototype.reverse.call(arr)
+  return scureHex.encode(arr)
 }
 
 /** Convert a raw 64-byte ECDSA signature (r||s) into ASN.1 DER format */
-export function encodeEcdsaSignatureToDer(rawSignature: Buffer): Buffer {
+export function encodeEcdsaSignatureToDer(
+  rawSignature: Uint8Array,
+): Uint8Array {
   if (rawSignature.length !== 64) {
     throw new Error("Expected 64-byte raw ECDSA signature")
   }
@@ -15,33 +20,29 @@ export function encodeEcdsaSignatureToDer(rawSignature: Buffer): Buffer {
   const r = rawSignature.subarray(0, 32)
   const s = rawSignature.subarray(32, 64)
 
-  const encodeInteger = (buf: Buffer) => {
+  const encodeInteger = (buf: Uint8Array) => {
     let i = 0
     while (i < buf.length && buf[i] === 0x00) i++
     let v = buf.subarray(i)
-    if (v.length === 0) v = Buffer.from([0])
+    if (v.length === 0) v = new Uint8Array([0])
     // If high bit is set, prepend 0x00 to indicate positive integer
-    if (v[0] & 0x80) v = Buffer.concat([Buffer.from([0x00]), v])
-    return Buffer.concat([Buffer.from([0x02, v.length]), v])
+    if (v[0] & 0x80) v = concatBytes([new Uint8Array([0x00]), v])
+    return concatBytes([new Uint8Array([0x02, v.length]), v])
   }
 
   const rEncoded = encodeInteger(r)
   const sEncoded = encodeInteger(s)
   const sequenceLen = rEncoded.length + sEncoded.length
-  return Buffer.concat([Buffer.from([0x30, sequenceLen]), rEncoded, sEncoded])
+  return concatBytes([new Uint8Array([0x30, sequenceLen]), rEncoded, sEncoded])
 }
 
-export function toBase64Url(buf: Buffer): string {
-  return buf
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
+export function toBase64Url(buf: Uint8Array): string {
+  return scureBase64Url.encode(buf)
 }
 
 /** Extract PEM certificates embedded in DCAP cert_data (type 5) */
-export function extractPemCertificates(certData: Buffer): string[] {
-  const text = certData.toString("utf8")
+export function extractPemCertificates(certData: Uint8Array): string[] {
+  const text = new TextDecoder().decode(certData)
   const pemRegex =
     /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g
   const matches = text.match(pemRegex)
@@ -53,7 +54,7 @@ export async function computeCertSha256Hex(
   cert: QV_X509Certificate,
 ): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", cert.rawData.slice())
-  return Buffer.from(hashBuffer).toString("hex")
+  return scureHex.encode(new Uint8Array(hashBuffer))
 }
 
 /** Normalize a certificate serial number to uppercase hex without delimiters or leading zeros */
@@ -70,10 +71,10 @@ export function normalizeSerialHex(input: string): string {
  * userCertificate fields from revokedCertificates. It does not validate CRL
  * signatures or extensions; it is only used to check serial membership.
  */
-export function parseCrlRevokedSerials(der: Buffer): string[] {
+export function parseCrlRevokedSerials(der: Uint8Array): string[] {
   const revokedSerials: string[] = []
 
-  const readTLV = (buf: Buffer, offset: number) => {
+  const readTLV = (buf: Uint8Array, offset: number) => {
     if (offset >= buf.length) throw new Error("DER: out of bounds")
     const tag = buf[offset]
     let cursor = offset + 1
@@ -158,10 +159,8 @@ export function parseCrlRevokedSerials(der: Buffer): string[] {
           let r = entry.valueOffset
           const serialTLV = readTLV(der, r)
           if (serialTLV.tag === TAG_INTEGER) {
-            const serialHex = Buffer.from(
-              der.subarray(serialTLV.valueOffset, serialTLV.nextOffset),
-            )
-              .toString("hex")
+            const serialHex = scureHex
+              .encode(der.subarray(serialTLV.valueOffset, serialTLV.nextOffset))
               .toUpperCase()
               .replace(/^0+(?=[0-9A-F])/g, "")
             revokedSerials.push(serialHex)
@@ -176,4 +175,21 @@ export function parseCrlRevokedSerials(der: Buffer): string[] {
   }
 
   return revokedSerials
+}
+
+export function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((n, c) => n + c.length, 0)
+  const out = new Uint8Array(total)
+  let off = 0
+  for (const c of chunks) {
+    out.set(c, off)
+    off += c.length
+  }
+  return out
+}
+
+export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
 }

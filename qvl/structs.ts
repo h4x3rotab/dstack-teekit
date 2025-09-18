@@ -1,4 +1,5 @@
 import { Parser } from "binary-parser"
+import { base64 as scureBase64 } from "@scure/base"
 
 export type Parsed<T extends Parser<any>> = T extends Parser<infer R>
   ? R
@@ -251,7 +252,7 @@ export function parseTdxQuote(quote: Buffer): {
 }
 
 export function parseTdxQuoteBase64(quote: string) {
-  return parseTdxQuote(Buffer.from(quote, "base64"))
+  return parseTdxQuote(Buffer.from(scureBase64.decode(quote)))
 }
 
 /**
@@ -274,5 +275,5 @@ export function parseSgxQuote(quote: Buffer): {
 }
 
 export function parseSgxQuoteBase64(quote: string) {
-  return parseSgxQuote(Buffer.from(quote, "base64"))
+  return parseSgxQuote(Buffer.from(scureBase64.decode(quote)))
 }
