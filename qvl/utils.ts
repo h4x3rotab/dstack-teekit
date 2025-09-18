@@ -1,5 +1,6 @@
 import { QV_X509Certificate } from "./x509.js"
 import { base64url as scureBase64Url, hex as scureHex } from "@scure/base"
+import { concatUint8Arrays, areUint8ArraysEqual } from "uint8array-extras"
 
 export const hex = (b: Uint8Array) => scureHex.encode(b)
 
@@ -178,18 +179,9 @@ export function parseCrlRevokedSerials(der: Uint8Array): string[] {
 }
 
 export function concatBytes(chunks: Uint8Array[]): Uint8Array {
-  const total = chunks.reduce((n, c) => n + c.length, 0)
-  const out = new Uint8Array(total)
-  let off = 0
-  for (const c of chunks) {
-    out.set(c, off)
-    off += c.length
-  }
-  return out
+  return concatUint8Arrays(chunks)
 }
 
 export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
+  return areUint8ArraysEqual(a, b)
 }

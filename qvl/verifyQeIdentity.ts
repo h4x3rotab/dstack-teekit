@@ -56,14 +56,13 @@ function hexEqualsMasked(
 
 /** Verify QE Identity against the QE report embedded in the quote. */
 export function verifyQeIdentity(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
   qeIdentity: QeIdentity,
   atTimeMs?: number,
 ): boolean {
   const now = atTimeMs ?? Date.now()
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { signature } = parseTdxQuote(quoteBytes)
   if (!signature.qe_report_present) return false

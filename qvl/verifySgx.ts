@@ -12,7 +12,7 @@ import {
 import { concatBytes, bytesEqual } from "./utils.js"
 import { base64 as scureBase64 } from "@scure/base"
 
-export async function verifySgx(quote: Buffer, config?: VerifyConfig) {
+export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   if (
     config !== undefined &&
     (typeof config !== "object" || Array.isArray(config))
@@ -93,12 +93,11 @@ export async function verifySgx(quote: Buffer, config?: VerifyConfig) {
  * (qe_report_body, 384 bytes) in qe_report_signature.
  */
 export async function verifySgxQeReportSignature(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
   extraCerts?: string[],
 ): Promise<boolean> {
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { header, signature } = parseSgxQuote(quoteBytes)
   if (header.version !== 3) throw new Error("Unsupported quote version")
@@ -159,11 +158,10 @@ export async function verifySgxQeReportSignature(
  * qe_report.report_data[0..32) == SHA256(attestation_public_key || qe_auth_data)
  */
 export async function verifySgxQeReportBinding(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
 ): Promise<boolean> {
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { header, signature } = parseSgxQuote(quoteBytes)
   if (header.version !== 3) throw new Error("Unsupported quote version")
@@ -201,11 +199,10 @@ export async function verifySgxQeReportBinding(
  * Does not validate the certificate chain, QE report, CRLs, TCBs, etc.
  */
 export async function verifySgxQuoteSignature(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
 ): Promise<boolean> {
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { header, signature } = parseSgxQuote(quoteBytes)
   if (header.version !== 3) throw new Error(`Unsupported quote version`)
@@ -246,5 +243,5 @@ export async function verifySgxQuoteSignature(
 }
 
 export async function verifySgxBase64(quote: string, config?: VerifyConfig) {
-  return await verifySgx(Buffer.from(scureBase64.decode(quote)), config)
+  return await verifySgx(scureBase64.decode(quote), config)
 }

@@ -1,9 +1,8 @@
 import { Parser } from "binary-parser"
 import { base64 as scureBase64 } from "@scure/base"
 
-export type Parsed<T extends Parser<any>> = T extends Parser<infer R>
-  ? R
-  : never
+export type Parsed<T extends Parser<any>> =
+  T extends Parser<infer R> ? R : never
 
 export const QuoteHeader = new Parser()
   .uint16le("version")
@@ -97,7 +96,7 @@ export const TdxQuoteV5SigDescriptor = new Parser()
  * SGX signatures contain a fixed-length ECDSA signature section, and
  * a variable-length cert_data tail.
  */
-export function parseSgxSignature(quote: Buffer) {
+export function parseSgxSignature(quote: Uint8Array) {
   const { sig_data } = SgxQuote.parse(quote)
 
   const EcdsaSignatureFixed = new Parser()
@@ -131,7 +130,7 @@ export function parseSgxSignature(quote: Buffer) {
  * variable offset for V5 quotes. It contains a fixed-length ECDSA signature,
  * variable-length QE auth_data, and variable-length cert_data tail.
  */
-export function parseTdxSignature(quote: Buffer, v5?: boolean) {
+export function parseTdxSignature(quote: Uint8Array, v5?: boolean) {
   let sig_data
   if (!v5) {
     sig_data = TdxQuoteV4.parse(quote).sig_data
@@ -187,14 +186,14 @@ export type TdxSignature = ReturnType<typeof parseTdxSignature>
 /**
  * Compute the signed region of an SGX quote: header || body (excludes sig length and sig_data)
  */
-export function getSgxSignedRegion(quoteBytes: Buffer): Buffer {
+export function getSgxSignedRegion(quoteBytes: Uint8Array): Uint8Array {
   return quoteBytes.subarray(0, QuoteHeader.sizeOf() + SgxReportBody.sizeOf())
 }
 
 /**
  * Compute the signed region of a TDX 1.0 quote: header || body (excludes sig length and sig_data)
  */
-export function getTdx10SignedRegion(quoteBytes: Buffer): Buffer {
+export function getTdx10SignedRegion(quoteBytes: Uint8Array): Uint8Array {
   const headerLen = QuoteHeader.sizeOf()
   const bodyLen = TdxQuoteBody_1_0.sizeOf()
   return quoteBytes.subarray(0, headerLen + bodyLen)
@@ -203,7 +202,7 @@ export function getTdx10SignedRegion(quoteBytes: Buffer): Buffer {
 /**
  * Compute the signed region of a TDX 1.5 quote: header || body_descriptor || body
  */
-export function getTdx15SignedRegion(quoteBytes: Buffer): Buffer {
+export function getTdx15SignedRegion(quoteBytes: Uint8Array): Uint8Array {
   const { body_size } = TdxQuoteV5Descriptor.parse(quoteBytes)
   const headerLen = QuoteHeader.sizeOf()
   const totalLen = headerLen + 2 + 4 + body_size
@@ -217,7 +216,7 @@ export type QuoteHeaderType = Parsed<typeof QuoteHeader>
 export type TdxQuoteBody10Type = Parsed<typeof TdxQuoteBody_1_0>
 export type TdxQuoteBody15Type = Parsed<typeof TdxQuoteBody_1_5>
 
-export function parseTdxQuote(quote: Buffer): {
+export function parseTdxQuote(quote: Uint8Array): {
   header: QuoteHeaderType
   body: TdxQuoteBody10Type | TdxQuoteBody15Type
   signature: TdxSignature
@@ -252,13 +251,13 @@ export function parseTdxQuote(quote: Buffer): {
 }
 
 export function parseTdxQuoteBase64(quote: string) {
-  return parseTdxQuote(Buffer.from(scureBase64.decode(quote)))
+  return parseTdxQuote(scureBase64.decode(quote))
 }
 
 /**
  * Parse a TDX 1.0 or 1.5 quote as header, body, and signature.
  */
-export function parseSgxQuote(quote: Buffer): {
+export function parseSgxQuote(quote: Uint8Array): {
   header: QuoteHeaderType
   body: Parsed<typeof SgxReportBody>
   signature: SgxSignature
@@ -275,5 +274,5 @@ export function parseSgxQuote(quote: Buffer): {
 }
 
 export function parseSgxQuoteBase64(quote: string) {
-  return parseSgxQuote(Buffer.from(scureBase64.decode(quote)))
+  return parseSgxQuote(scureBase64.decode(quote))
 }

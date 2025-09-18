@@ -17,7 +17,7 @@ import { intelSgxRootCaPem } from "./rootCa.js"
 import { base64 as scureBase64 } from "@scure/base"
 
 export interface VerifyConfig {
-  crls: Buffer[]
+  crls: Uint8Array[]
   pinnedRootCerts?: QV_X509Certificate[]
   date?: number
   extraCertdata?: string[]
@@ -33,7 +33,7 @@ export const DEFAULT_PINNED_ROOT_CERTS: QV_X509Certificate[] = [
  *
  * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
  */
-export async function verifyTdx(quote: Buffer, config?: VerifyConfig) {
+export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
   if (
     config !== undefined &&
     (typeof config !== "object" || Array.isArray(config))
@@ -108,7 +108,7 @@ export async function verifyTdx(quote: Buffer, config?: VerifyConfig) {
 }
 
 export async function verifyTdxBase64(quote: string, config?: VerifyConfig) {
-  return await verifyTdx(Buffer.from(scureBase64.decode(quote)), config)
+  return await verifyTdx(scureBase64.decode(quote), config)
 }
 
 /**
@@ -120,7 +120,7 @@ export async function verifyTdxBase64(quote: string, config?: VerifyConfig) {
 export async function verifyPCKChain(
   certData: string[],
   verifyAtTimeMs: number | null,
-  crls?: Buffer[],
+  crls?: Uint8Array[],
 ): Promise<{
   status: "valid" | "invalid" | "expired" | "revoked"
   root: QV_X509Certificate | null
@@ -256,12 +256,11 @@ export async function verifyPCKChain(
  * and the qe_report body (384 bytes).
  */
 export async function verifyTdxQeReportSignature(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
   extraCerts?: string[],
 ): Promise<boolean> {
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { header, signature } = parseTdxQuote(quoteBytes)
   if (header.version !== 4 && header.version !== 5)
@@ -326,11 +325,10 @@ export async function verifyTdxQeReportSignature(
  * Accept several reasonable variants to accommodate ecosystem differences.
  */
 export async function verifyTdxQeReportBinding(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
 ): Promise<boolean> {
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { header, signature } = parseTdxQuote(quoteBytes)
   if (header.version !== 4 && header.version !== 5)
@@ -370,11 +368,10 @@ export async function verifyTdxQeReportBinding(
  * does not validate the certificate chain, QE report, CRLs, TCBs, etc.
  */
 export async function verifyTdxQuoteSignature(
-  quoteInput: string | Buffer,
+  quoteInput: string | Uint8Array,
 ): Promise<boolean> {
-  const quoteBytes = Buffer.isBuffer(quoteInput)
-    ? quoteInput
-    : Buffer.from(scureBase64.decode(quoteInput))
+  const quoteBytes =
+    typeof quoteInput === "string" ? scureBase64.decode(quoteInput) : quoteInput
 
   const { header, signature } = parseTdxQuote(quoteBytes)
 
