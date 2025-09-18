@@ -443,6 +443,6 @@ export async function verifyTdxQuoteSignature(
     { name: "ECDSA", hash: "SHA-256" },
     publicKey,
     rawSig,
-    message,
+    message.slice(),
   )
 }

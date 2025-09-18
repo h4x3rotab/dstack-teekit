@@ -244,7 +244,7 @@ export async function verifySgxQuoteSignature(
     { name: "ECDSA", hash: "SHA-256" },
     publicKey,
     rawSig,
-    message,
+    message.slice(),
   )
 }
 
