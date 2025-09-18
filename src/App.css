@@ -171,6 +171,17 @@
   opacity: 0.7;
 }
 
+.verification-display {
+  text-align: center;
+  margin: 6px auto;
+  font-size: 0.85em;
+  color: #333;
+  word-wrap: break-word;
+  max-width: 280px;
+  white-space: pre-wrap;
+  font-family: monospace;
+}
+
 .hidden-messages-display {
   text-align: center;
   color: #9ca3af;

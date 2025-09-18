@@ -156,7 +156,7 @@ function App() {
       // Try full verification first (may fail in browser without polyfills)
       const ok = await qvl.verifyTdxBase64(tappdV4Base64, { date: Date.parse("2025-09-01"), crls: [] })
       if (ok) {
-        setVerifyResult("✅ TDX v4 (Tappd) verification succeeded")
+        setVerifyResult("✅ TDX verification succeeded")
         return
       }
       setVerifyResult("❌ Verification returned false")
@@ -167,7 +167,7 @@ function App() {
         const { hex } = await import(/* @vite-ignore */ "../qvl/utils.js")
         const { body } = structs.parseTdxQuoteBase64(tappdV4Base64)
         setVerifyResult(
-          `Parsed with QVL structs. MRTD=${hex(body.mr_td)} report_data=${hex(body.report_data)}. Verify error: ${(err as Error)?.message || err}`,
+          `MRTD=${hex(body.mr_td)} report_data=${hex(body.report_data)}. ${(err as Error)?.message || err}`,
         )
       } catch (inner) {
         setVerifyResult(`Failed to import/parse QVL: ${(inner as Error)?.message || inner}`)
@@ -224,24 +224,22 @@ function App() {
             >
               Refresh
             </a>
-            <span style={{ marginLeft: 12 }}>
+            <div style={{ margin: "10px 0" }}>
               <button
                 onClick={(e) => {
                   e.preventDefault()
                   verifyTdxInBrowser()
                 }}
                 style={{
-                  marginLeft: 8,
                   padding: "4px 8px",
                   fontSize: "0.85em",
-                  cursor: "pointer",
                 }}
               >
                 Verify TDX v4 (Tappd)
               </button>
-            </span>
+            </div>
             {verifyResult && (
-              <div style={{ marginTop: 6, fontSize: "0.85em", color: "#333" }}>
+              <div className="verification-display">
                 {verifyResult}
               </div>
             )}

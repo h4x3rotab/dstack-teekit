@@ -20,7 +20,6 @@ import {
 } from "./structs.js"
 import {
   computeCertSha256Hex,
-  encodeEcdsaSignatureToDer,
   extractPemCertificates,
   normalizeSerialHex,
   parseCrlRevokedSerials,
