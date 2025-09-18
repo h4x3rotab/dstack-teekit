@@ -1,10 +1,5 @@
 import { createHash, createPublicKey, createVerify } from "crypto"
-import {
-  getSgxSignedRegion,
-  parseSgxQuote,
-  QuoteHeader,
-  SgxReportBody,
-} from "./structs.js"
+import { getSgxSignedRegion, parseSgxQuote } from "./structs.js"
 import {
   computeCertSha256Hex,
   encodeEcdsaSignatureToDer,

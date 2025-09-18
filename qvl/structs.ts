@@ -12,7 +12,7 @@ export const QuoteHeader = new Struct("QuoteHeader")
 
 export const SgxReportBody = new Struct("SgxReportBody")
   .Buffer("cpu_svn", 16)
-  .UInt32LE("misc_select", 32)
+  .UInt32LE("misc_select")
   .Buffer("reserved1", 28)
   .Buffer("attributes", 16)
   .Buffer("mr_enclave", 32)
@@ -197,7 +197,7 @@ export type SgxSignature = ReturnType<typeof parseSgxSignature>
 export type TdxSignature = ReturnType<typeof parseTdxSignature>
 
 /**
- * Compute the signed region of a TDX 1.0 quote: header || body (excludes sig length and sig_data)
+ * Compute the signed region of an SGX quote: header || body (excludes sig length and sig_data)
  */
 export function getSgxSignedRegion(quoteBytes: Buffer): Buffer {
   return quoteBytes.subarray(0, QuoteHeader.baseSize + SgxReportBody.baseSize)
