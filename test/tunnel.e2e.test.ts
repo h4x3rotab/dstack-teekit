@@ -1,7 +1,6 @@
 import test from "ava"
 import express, { Request, Response } from "express"
 import type { AddressInfo } from "node:net"
-import { WebSocketServer } from "ws"
 
 import { RA as TunnelServer } from "../tunnel/server.ts"
 import { RA as TunnelClient } from "../tunnel/client.ts"
@@ -23,7 +22,7 @@ if (!(globalThis as any).CloseEvent) {
 
     constructor(
       type: string,
-      init?: { code?: number; reason?: string; wasClean?: boolean }
+      init?: { code?: number; reason?: string; wasClean?: boolean },
     ) {
       super(type)
       this.code = init?.code ?? 1000
@@ -82,7 +81,7 @@ async function startTunnelApp() {
 
 async function stopTunnel(
   tunnelServer: TunnelServer,
-  tunnelClient: TunnelClient
+  tunnelClient: TunnelClient,
 ) {
   try {
     // Prevent client from scheduling reconnect timers
@@ -134,83 +133,92 @@ test.serial("POST fetch through tunnel", async (t) => {
   }
 })
 
-test.serial("WebSocket lifecycle over tunnel (terminates at server wss)", async (t) => {
-  const { tunnelServer, tunnelClient, origin } = await startTunnelApp()
+test.serial(
+  "WebSocket lifecycle over tunnel (terminates at server wss)",
+  async (t) => {
+    const { tunnelServer, tunnelClient, origin } = await startTunnelApp()
 
-  // Attach an echo handler to the server's built-in WebSocketServer
-  tunnelServer.wss.on("connection", (ws) => {
-    ws.on("message", (data) => {
-      ws.send(data)
+    // Attach an echo handler to the server's built-in WebSocketServer
+    tunnelServer.wss.on("connection", (ws) => {
+      ws.on("message", (data) => {
+        ws.send(data)
+      })
     })
-  })
 
-  try {
-    const withTimeout = async <T>(p: Promise<T>, ms: number, label: string) => {
-      let to: any
-      const timeout = new Promise<never>((_, reject) => {
-        to = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
-      })
-      try {
-        return (await Promise.race([p, timeout])) as T
-      } finally {
-        clearTimeout(to)
+    try {
+      const withTimeout = async <T>(
+        p: Promise<T>,
+        ms: number,
+        label: string,
+      ) => {
+        let to: any
+        const timeout = new Promise<never>((_, reject) => {
+          to = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+        })
+        try {
+          return (await Promise.race([p, timeout])) as T
+        } finally {
+          clearTimeout(to)
+        }
       }
-    }
 
-    const TunnelWS = tunnelClient.WebSocket
-    const ws = new TunnelWS(origin.replace(/^http/, "ws"))
+      const TunnelWS = tunnelClient.WebSocket
+      const ws = new TunnelWS(origin.replace(/^http/, "ws"))
 
-    t.is(ws.readyState, ws.CONNECTING)
+      t.is(ws.readyState, ws.CONNECTING)
 
-    const opened = withTimeout(
-      new Promise<void>((resolve) => {
-        ws.addEventListener("open", () => resolve())
-      }),
-      2000,
-      "open"
-    )
+      const opened = withTimeout(
+        new Promise<void>((resolve) => {
+          ws.addEventListener("open", () => resolve())
+        }),
+        2000,
+        "open",
+      )
 
-    const earlyClosed = withTimeout(
-      new Promise<void>((resolve) => {
-        ws.addEventListener("close", () => resolve())
-      }),
-      4000,
-      "early close"
-    )
-      .then(() => true)
-      .catch(() => false)
+      const earlyClosed = withTimeout(
+        new Promise<void>((resolve) => {
+          ws.addEventListener("close", () => resolve())
+        }),
+        4000,
+        "early close",
+      )
+        .then(() => true)
+        .catch(() => false)
 
-    await opened
-    t.is(ws.readyState, ws.OPEN)
+      await opened
+      t.is(ws.readyState, ws.OPEN)
 
-    const message = withTimeout(
-      new Promise<string>((resolve) => {
-        ws.addEventListener("message", (evt: any) => resolve(String(evt.data)))
-      }),
-      2000,
-      "message"
-    )
+      const message = withTimeout(
+        new Promise<string>((resolve) => {
+          ws.addEventListener("message", (evt: any) =>
+            resolve(String(evt.data)),
+          )
+        }),
+        2000,
+        "message",
+      )
 
-    ws.send("ping")
-    const echoed = await message
-    t.is(echoed, "ping")
+      ws.send("ping")
+      const echoed = await message
+      t.is(echoed, "ping")
 
-    const wasEarlyClosed = await earlyClosed
-    if (!wasEarlyClosed) {
-      const closeEvent = new Promise<void>((resolve) => {
-        ws.addEventListener("close", () => resolve())
-      })
-      ws.close(1000, "done")
-      // Wait up to 2s for close event; if not received, assert CLOSING state
-      await Promise.race([
-        closeEvent,
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ])
-      if (ws.readyState !== ws.CLOSED) {
-        t.is(ws.readyState, ws.CLOSING)
+      const wasEarlyClosed = await earlyClosed
+      if (!wasEarlyClosed) {
+        const closeEvent = new Promise<void>((resolve) => {
+          ws.addEventListener("close", () => resolve())
+        })
+        ws.close(1000, "done")
+        // Wait up to 2s for close event; if not received, assert CLOSING state
+        await Promise.race([
+          closeEvent,
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ])
+        if (ws.readyState !== ws.CLOSED) {
+          t.is(ws.readyState, ws.CLOSING)
+        }
       }
+    } finally {
+      await stopTunnel(tunnelServer, tunnelClient)
     }
-  } finally {
-    await stopTunnel(tunnelServer, tunnelClient)
-  }
-})
+  },
+)

@@ -18,9 +18,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
 
     /* Types */
-    "typeRoots": ["./types", "./node_modules/@types"]
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "types": ["node"]
   },
-  "include": ["src", "qvl", "tunnel"]
+  "include": ["src", "qvl", "tunnel", "server", "test", "types"]
 }

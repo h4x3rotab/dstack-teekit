@@ -1,7 +1,7 @@
 import test from "ava"
 import express, { Request, Response } from "express"
 import type { AddressInfo } from "node:net"
-import { WebSocketServer, WebSocket } from "ws"
+import { WebSocket } from "ws"
 import sodium from "libsodium-wrappers"
 
 import { RA as TunnelServer } from "../tunnel/server.ts"
