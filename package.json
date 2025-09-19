@@ -14,7 +14,6 @@
     "test": "ava"
   },
   "dependencies": {
-    "@peculiar/webcrypto": "^1.5.0",
     "@scure/base": "^2.0.0",
     "asn1js": "^3.0.5",
     "cors": "^2.8.5",
@@ -28,7 +27,6 @@
     "react-dom": "^19.1.1",
     "restructure": "^3.0.2",
     "uint8array-extras": "^1.5.0",
-    "webcrypto-liner": "^1.4.3",
     "ws": "^8.18.3"
   },
   "devDependencies": {

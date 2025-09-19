@@ -2,8 +2,6 @@ import test from "ava"
 import { QV_X509Certificate } from "../qvl"
 import fs from "node:fs"
 
-import { Crypto } from "@peculiar/webcrypto"
-
 import {
   parseTdxQuote,
   parseTdxQuoteBase64,

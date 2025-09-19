@@ -338,14 +338,14 @@ export async function verifyTdxQeReportBinding(
   const combinedData = concatBytes([
     signature.attestation_public_key,
     signature.qe_auth_data,
-  ])
+  ]).slice()
   const hashedPubkey = await crypto.subtle.digest("SHA-256", combinedData)
 
   const uncompressedData = concatBytes([
     new Uint8Array([0x04]),
     signature.attestation_public_key,
     signature.qe_auth_data,
-  ])
+  ]).slice()
   const hashedUncompressedPubkey = await crypto.subtle.digest(
     "SHA-256",
     uncompressedData,
