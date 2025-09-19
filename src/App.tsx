@@ -11,7 +11,7 @@ import "./App.css"
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
 import { RA } from "../tunnel/client.js"
-import { tappdV4Base64 } from "./samples/tdxV4Tappd.js"
+import { tappdV4Base64, trusteeV5Base64, occlumSgxBase64 } from "./samples/samples.js"
 
 const baseUrl =
   document.location.hostname === "localhost"
@@ -150,35 +150,30 @@ function App() {
   const verifyTdxInBrowser = useCallback(async () => {
     setVerifyResult("Verifying TDX quote...")
     try {
-      // Dynamic import to avoid loading QVL until needed
       const qvl = await import(/* @vite-ignore */ "../qvl/index.js")
 
-      // Try full verification first (may fail in browser without polyfills)
       const ok = await qvl.verifyTdxBase64(tappdV4Base64, {
         date: Date.parse("2025-09-01"),
         crls: [],
       })
-      if (ok) {
-        setVerifyResult("✅ TDX verification succeeded")
+
+      const ok2 = await qvl.verifyTdxBase64(trusteeV5Base64, {
+        date: Date.parse("2025-09-01"),
+        crls: [],
+      })
+
+      const ok3 = await qvl.verifySgxBase64(occlumSgxBase64, {
+        date: Date.parse("2025-09-01"),
+        crls: [],
+      })
+
+      if (ok && ok2 && ok3) {
+        setVerifyResult("✅ TDX v4, v5, SGX verification succeeded")
         return
       }
       setVerifyResult("❌ Verification returned false")
     } catch (err) {
-      try {
-        // Fallback: import only parser/formatters that avoid Node crypto
-        const structs = await import(/* @vite-ignore */ "../qvl/structs.js")
-        const { hex } = await import(/* @vite-ignore */ "../qvl/utils.js")
-        const { body } = structs.parseTdxQuoteBase64(tappdV4Base64)
-        setVerifyResult(
-          `MRTD=${hex(body.mr_td)} report_data=${hex(body.report_data)}. ${(err as Error)?.message || err}`,
-        )
-        throw err
-      } catch (inner) {
-        setVerifyResult(
-          `Failed to import/parse QVL: ${(inner as Error)?.message || inner}`,
-        )
-        throw inner
-      }
+      setVerifyResult(`Failed to import/parse QVL: ${(err as Error)?.message || err}`)
       throw err
     }
   }, [])
