@@ -28,90 +28,6 @@ export const DEFAULT_PINNED_ROOT_CERTS: QV_X509Certificate[] = [
 ]
 
 /**
- * Verify a complete chain of trust for a TDX enclave, including the
- * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
- *
- * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
- */
-export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
-  if (
-    config !== undefined &&
-    (typeof config !== "object" || Array.isArray(config))
-  ) {
-    throw new Error("verifyTdx: invalid config argument provided")
-  }
-
-  const pinnedRootCerts = config?.pinnedRootCerts ?? DEFAULT_PINNED_ROOT_CERTS
-  const date = config?.date
-  const extraCertdata = config?.extraCertdata
-  const crls = config?.crls
-  const { signature, header } = parseTdxQuote(quote)
-  const certs = extractPemCertificates(signature.cert_data)
-  let { status, root } = await verifyPCKChain(certs, date ?? +new Date(), crls)
-
-  // Use fallback certs, only if certdata is not provided
-  if (!root && certs.length === 0) {
-    if (!extraCertdata) {
-      throw new Error("verifyTdx: missing certdata")
-    }
-    const fallback = await verifyPCKChain(
-      extraCertdata,
-      date ?? +new Date(),
-      crls,
-    )
-    status = fallback.status
-    root = fallback.root
-  }
-  if (status === "expired") {
-    throw new Error("verifyTdx: expired cert chain, or not yet valid")
-  }
-  if (status === "revoked") {
-    throw new Error("verifyTdx: revoked certificate in cert chain")
-  }
-  if (status !== "valid") {
-    throw new Error("verifyTdx: invalid cert chain")
-  }
-  if (!root) {
-    throw new Error("verifyTdx: invalid cert chain")
-  }
-
-  // Check against the pinned root certificates
-  const candidateRootHash = await computeCertSha256Hex(root)
-  const knownRootHashes = new Set(
-    await Promise.all(pinnedRootCerts.map(computeCertSha256Hex)),
-  )
-  const rootIsValid = knownRootHashes.has(candidateRootHash)
-  if (!rootIsValid) {
-    throw new Error("verifyTdx: invalid root")
-  }
-
-  if (header.tee_type !== 129) {
-    throw new Error("verifyTdx: only tdx is supported")
-  }
-  if (header.att_key_type !== 2) {
-    throw new Error("verifyTdx: only ECDSA att_key_type is supported")
-  }
-  if (signature.cert_data_type !== 5) {
-    throw new Error("verifyTdx: only PCK cert_data is supported")
-  }
-  if (!(await verifyTdxQeReportSignature(quote, extraCertdata))) {
-    throw new Error("verifyTdx: invalid qe report signature")
-  }
-  if (!(await verifyTdxQeReportBinding(quote))) {
-    throw new Error("verifyTdx: invalid qe report binding")
-  }
-  if (!(await verifyTdxQuoteSignature(quote))) {
-    throw new Error("verifyTdx: invalid signature over quote")
-  }
-
-  return true
-}
-
-export async function verifyTdxBase64(quote: string, config?: VerifyConfig) {
-  return await verifyTdx(scureBase64.decode(quote), config)
-}
-
-/**
  * Verify a PCK provisioning certificate chain embedded in cert_data.
  * - Identifies the leaf certificate and walks up the chain, following issuer/subject chaining.
  * - Expects at least two certificates.
@@ -212,7 +128,7 @@ export async function verifyPCKChain(
   for (let i = 1; i < chain.length; i++) {
     const issuerNode = chain[i]
     const bc = issuerNode.getExtension(BasicConstraintsExtension)
-    // CA certs must assert CA=true
+
     if (!bc || !bc.ca) {
       return { status: "invalid", root: null, chain: [] }
     }
@@ -321,8 +237,6 @@ export async function verifyTdxQeReportSignature(
  * report_data (QE binding):
  *
  * qe_report.report_data[0..32) == SHA256(attestation_public_key || qe_auth_data)
- *
- * Accept several reasonable variants to accommodate ecosystem differences.
  */
 export async function verifyTdxQeReportBinding(
   quoteInput: string | Uint8Array,
@@ -416,4 +330,88 @@ export async function verifyTdxQuoteSignature(
     rawSig,
     message.slice(),
   )
+}
+
+/**
+ * Verify a complete chain of trust for a TDX enclave, including the
+ * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
+ *
+ * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
+ */
+export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
+  if (
+    config !== undefined &&
+    (typeof config !== "object" || Array.isArray(config))
+  ) {
+    throw new Error("verifyTdx: invalid config argument provided")
+  }
+
+  const pinnedRootCerts = config?.pinnedRootCerts ?? DEFAULT_PINNED_ROOT_CERTS
+  const date = config?.date
+  const extraCertdata = config?.extraCertdata
+  const crls = config?.crls
+  const { signature, header } = parseTdxQuote(quote)
+  const certs = extractPemCertificates(signature.cert_data)
+  let { status, root } = await verifyPCKChain(certs, date ?? +new Date(), crls)
+
+  // Use fallback certs, only if certdata is not provided
+  if (!root && certs.length === 0) {
+    if (!extraCertdata) {
+      throw new Error("verifyTdx: missing certdata")
+    }
+    const fallback = await verifyPCKChain(
+      extraCertdata,
+      date ?? +new Date(),
+      crls,
+    )
+    status = fallback.status
+    root = fallback.root
+  }
+  if (status === "expired") {
+    throw new Error("verifyTdx: expired cert chain, or not yet valid")
+  }
+  if (status === "revoked") {
+    throw new Error("verifyTdx: revoked certificate in cert chain")
+  }
+  if (status !== "valid") {
+    throw new Error("verifyTdx: invalid cert chain")
+  }
+  if (!root) {
+    throw new Error("verifyTdx: invalid cert chain")
+  }
+
+  // Check against the pinned root certificates
+  const candidateRootHash = await computeCertSha256Hex(root)
+  const knownRootHashes = new Set(
+    await Promise.all(pinnedRootCerts.map(computeCertSha256Hex)),
+  )
+  const rootIsValid = knownRootHashes.has(candidateRootHash)
+  if (!rootIsValid) {
+    throw new Error("verifyTdx: invalid root")
+  }
+
+  if (header.tee_type !== 129) {
+    throw new Error("verifyTdx: only tdx is supported")
+  }
+  if (header.att_key_type !== 2) {
+    throw new Error("verifyTdx: only ECDSA att_key_type is supported")
+  }
+  if (signature.cert_data_type !== 5) {
+    throw new Error("verifyTdx: only PCK cert_data is supported")
+  }
+  if (!(await verifyTdxQeReportSignature(quote, extraCertdata))) {
+    throw new Error("verifyTdx: invalid qe report signature")
+  }
+  if (!(await verifyTdxQeReportBinding(quote))) {
+    throw new Error("verifyTdx: invalid qe report binding")
+  }
+  if (!(await verifyTdxQuoteSignature(quote))) {
+    throw new Error("verifyTdx: invalid signature over quote")
+  }
+
+  return true
+}
+
+export async function verifyTdxBase64(quote: string, config?: VerifyConfig) {
+  return await verifyTdx(scureBase64.decode(quote), config)
 }
