@@ -24,7 +24,7 @@ const MAX_MESSAGES = 30
 const startTime = Date.now()
 
 // API Routes
-app.get("/uptime", (req, res) => {
+app.get("/uptime", (_req, res) => {
   const uptimeMs = Date.now() - startTime
   const uptimeSeconds = Math.floor(uptimeMs / 1000)
   const uptimeMinutes = Math.floor(uptimeSeconds / 60)

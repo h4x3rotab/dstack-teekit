@@ -128,7 +128,7 @@ export function rebuildSgxQuoteWithCertData(
 }
 
 export async function getCertPemsFromQuote(
-  quote: Buffer,
+  quote: Uint8Array,
   config = { tdx: false },
 ): Promise<{
   leaf: string

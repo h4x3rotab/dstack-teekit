@@ -9,11 +9,9 @@ import {
   hex,
   reverseHexBytes,
   extractPemCertificates,
-  verifyPCKChain,
   verifyTdx,
   verifyTdxBase64,
   getTdx10SignedRegion,
-  computeCertSha256Hex,
   normalizeSerialHex,
 } from "../qvl/index.js"
 import {

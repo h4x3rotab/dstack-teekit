@@ -56,7 +56,7 @@ test.serial("Wire messages are encrypted after handshake", async (t) => {
 
   // Attach echo handler on server app wss
   tunnelServer.wss.on("connection", (ws) => {
-    ws.on("message", (data) => ws.send(data))
+    ws.on("message", (data: any) => ws.send(data))
   })
 
   try {

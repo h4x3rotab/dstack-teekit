@@ -140,9 +140,7 @@ test.serial(
 
     // Attach an echo handler to the server's built-in WebSocketServer
     tunnelServer.wss.on("connection", (ws) => {
-      ws.on("message", (data) => {
-        ws.send(data)
-      })
+      ws.on("message", (data: any) => ws.send(data))
     })
 
     try {
