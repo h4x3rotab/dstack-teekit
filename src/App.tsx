@@ -154,7 +154,10 @@ function App() {
       const qvl = await import(/* @vite-ignore */ "../qvl/index.js")
 
       // Try full verification first (may fail in browser without polyfills)
-      const ok = await qvl.verifyTdxBase64(tappdV4Base64, { date: Date.parse("2025-09-01"), crls: [] })
+      const ok = await qvl.verifyTdxBase64(tappdV4Base64, {
+        date: Date.parse("2025-09-01"),
+        crls: [],
+      })
       if (ok) {
         setVerifyResult("✅ TDX verification succeeded")
         return
@@ -169,8 +172,11 @@ function App() {
         setVerifyResult(
           `MRTD=${hex(body.mr_td)} report_data=${hex(body.report_data)}. ${(err as Error)?.message || err}`,
         )
+        throw err
       } catch (inner) {
-        setVerifyResult(`Failed to import/parse QVL: ${(inner as Error)?.message || inner}`)
+        setVerifyResult(
+          `Failed to import/parse QVL: ${(inner as Error)?.message || inner}`,
+        )
         throw inner
       }
       throw err
@@ -239,9 +245,7 @@ function App() {
               </button>
             </div>
             {verifyResult && (
-              <div className="verification-display">
-                {verifyResult}
-              </div>
+              <div className="verification-display">{verifyResult}</div>
             )}
           </div>
         )}

@@ -38,7 +38,7 @@ export function encodeEcdsaSignatureToDer(
 }
 
 export function toBase64Url(buf: Uint8Array): string {
-  return scureBase64Url.encode(buf)
+  return scureBase64Url.encode(buf).replace(/=+$/, "")
 }
 
 /** Extract PEM certificates embedded in DCAP cert_data (type 5) */
