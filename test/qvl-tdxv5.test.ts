@@ -9,10 +9,10 @@ import {
   normalizeSerialHex,
 } from "../qvl/index.js"
 import {
-  rebuildQuoteWithCertData,
+  rebuildTdxQuoteWithCertData,
   tamperPemSignature,
-  buildCRLWithSerials,
-  getCertPemsFromTdxQuoteBufferImpl,
+  buildCRL,
+  getCertPemsFromQuote,
 } from "./qvl-helpers.js"
 
 const BASE_TIME = Date.parse("2025-09-01")
@@ -44,7 +44,7 @@ async function getTrusteeCertPems(): Promise<{
   all: string[]
 }> {
   const quote = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
-  return getCertPemsFromTdxQuoteBufferImpl(quote)
+  return getCertPemsFromQuote(quote, { tdx: true })
 }
 
 test.serial("Reject a V5 TDX quote, missing root cert", async (t) => {
@@ -64,7 +64,7 @@ test.serial("Reject a V5 TDX quote, missing root cert", async (t) => {
 test.serial("Reject a V5 TDX quote, missing intermediate cert", async (t) => {
   const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
   const { leaf, root } = await getTrusteeCertPems()
-  const noEmbedded = rebuildQuoteWithCertData(buf, Buffer.alloc(0))
+  const noEmbedded = rebuildTdxQuoteWithCertData(buf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -80,7 +80,7 @@ test.serial("Reject a V5 TDX quote, missing intermediate cert", async (t) => {
 test.serial("Reject a V5 TDX quote, missing leaf cert", async (t) => {
   const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
   const { intermediate, root } = await getTrusteeCertPems()
-  const noEmbedded = rebuildQuoteWithCertData(buf, Buffer.alloc(0))
+  const noEmbedded = rebuildTdxQuoteWithCertData(buf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -99,7 +99,7 @@ test.serial("Reject a V5 TDX quote, revoked root cert", async (t) => {
   const rootSerial = normalizeSerialHex(
     new QV_X509Certificate(root).serialNumber,
   )
-  const crl = buildCRLWithSerials([rootSerial])
+  const crl = buildCRL([rootSerial])
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(buf, {
@@ -115,7 +115,7 @@ test.serial("Reject a V5 TDX quote, invalid root self-signature", async (t) => {
   const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
   const { leaf, intermediate, root } = await getTrusteeCertPems()
   const tamperedRoot = tamperPemSignature(root)
-  const noEmbedded = rebuildQuoteWithCertData(buf, Buffer.alloc(0))
+  const noEmbedded = rebuildTdxQuoteWithCertData(buf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -254,7 +254,7 @@ test.serial(
   "Reject a V5 TDX quote, missing certdata (no fallback)",
   async (t) => {
     const base = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
-    const noEmbedded = rebuildQuoteWithCertData(base, Buffer.alloc(0))
+    const noEmbedded = rebuildTdxQuoteWithCertData(base, Buffer.alloc(0))
     const err = await t.throwsAsync(
       async () => await verifyTdx(noEmbedded, { date: BASE_TIME, crls: [] }),
     )
@@ -295,7 +295,7 @@ test.serial("Reject a V5 TDX quote, revoked intermediate cert", async (t) => {
   const serial = normalizeSerialHex(
     new QV_X509Certificate(intermediate).serialNumber,
   )
-  const crl = buildCRLWithSerials([serial])
+  const crl = buildCRL([serial])
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(buf, {
@@ -311,7 +311,7 @@ test.serial("Reject a V5 TDX quote, revoked leaf cert", async (t) => {
   const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
   const { leaf } = await getTrusteeCertPems()
   const serial = normalizeSerialHex(new QV_X509Certificate(leaf).serialNumber)
-  const crl = buildCRLWithSerials([serial])
+  const crl = buildCRL([serial])
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(buf, {

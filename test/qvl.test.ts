@@ -1,6 +1,7 @@
 import test from "ava"
 import { QV_X509Certificate } from "../qvl/index.js"
 import fs from "node:fs"
+import { base64 as scureBase64 } from "@scure/base"
 
 import {
   parseTdxQuote,
@@ -17,8 +18,9 @@ import {
 } from "../qvl/index.js"
 import {
   tamperPemSignature,
-  buildCRLWithSerials,
-  rebuildQuoteWithCertData,
+  buildCRL,
+  rebuildTdxQuoteWithCertData,
+  getCertPemsFromQuote,
 } from "./qvl-helpers.js"
 
 const BASE_TIME = Date.parse("2025-09-01")
@@ -255,39 +257,13 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   t.true(await verifyTdxBase64(quote, { date: BASE_TIME, crls: [] }))
 })
 
-// ---------------------- Negative tests for invalid scenarios ----------------------
+// Negative tests based on the GCP quote
 
 function getGcpQuoteBase64(): string {
   const data = JSON.parse(
     fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
   )
   return data.tdx.quote as string
-}
-
-async function getGcpCertPems(): Promise<{
-  leaf: string
-  intermediate: string
-  root: string
-  all: string[]
-}> {
-  const quoteB64 = getGcpQuoteBase64()
-  const { signature } = parseTdxQuoteBase64(quoteB64)
-  const pems = extractPemCertificates(signature.cert_data)
-  const { chain } = await verifyPCKChain(pems, null)
-  const hashToPem = new Map<string, string>()
-  for (const pem of pems) {
-    const h = await computeCertSha256Hex(new QV_X509Certificate(pem))
-    hashToPem.set(h, pem)
-  }
-  const leafPem = hashToPem.get(await computeCertSha256Hex(chain[0]))!
-  const intermediatePem = hashToPem.get(await computeCertSha256Hex(chain[1]))!
-  const rootPem = hashToPem.get(await computeCertSha256Hex(chain[2]))!
-  return {
-    leaf: leafPem,
-    intermediate: intermediatePem,
-    root: rootPem,
-    all: pems,
-  }
 }
 
 test.serial("Reject a V4 TDX quote, missing root cert", async (t) => {
@@ -307,8 +283,11 @@ test.serial("Reject a V4 TDX quote, missing root cert", async (t) => {
 test.serial("Reject a V4 TDX quote, missing intermediate cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
-  const { leaf, root } = await getGcpCertPems()
-  const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
+  const { leaf, root } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
+  const noEmbedded = rebuildTdxQuoteWithCertData(quoteBuf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -324,8 +303,11 @@ test.serial("Reject a V4 TDX quote, missing intermediate cert", async (t) => {
 test.serial("Reject a V4 TDX quote, missing leaf cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
-  const { intermediate, root } = await getGcpCertPems()
-  const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
+  const { intermediate, root } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
+  const noEmbedded = rebuildTdxQuoteWithCertData(quoteBuf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -340,11 +322,14 @@ test.serial("Reject a V4 TDX quote, missing leaf cert", async (t) => {
 
 test.serial("Reject a V4 TDX quote, revoked root cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
-  const { root } = await getGcpCertPems()
+  const { root } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
   const rootSerial = normalizeSerialHex(
     new QV_X509Certificate(root).serialNumber,
   )
-  const crl = buildCRLWithSerials([rootSerial])
+  const crl = buildCRL([rootSerial])
   const err = await t.throwsAsync(
     async () =>
       await verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
@@ -355,11 +340,14 @@ test.serial("Reject a V4 TDX quote, revoked root cert", async (t) => {
 
 test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
-  const { intermediate } = await getGcpCertPems()
+  const { intermediate } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
   const serial = normalizeSerialHex(
     new QV_X509Certificate(intermediate).serialNumber,
   )
-  const crl = buildCRLWithSerials([serial])
+  const crl = buildCRL([serial])
   const err = await t.throwsAsync(
     async () =>
       await verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
@@ -370,9 +358,12 @@ test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
 
 test.serial("Reject a V4 TDX quote, revoked leaf cert", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
-  const { leaf } = await getGcpCertPems()
+  const { leaf } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
   const serial = normalizeSerialHex(new QV_X509Certificate(leaf).serialNumber)
-  const crl = buildCRLWithSerials([serial])
+  const crl = buildCRL([serial])
   const err = await t.throwsAsync(
     async () =>
       await verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
@@ -384,9 +375,12 @@ test.serial("Reject a V4 TDX quote, revoked leaf cert", async (t) => {
 test.serial("Reject a V4 TDX quote, invalid root self-signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
-  const { leaf, intermediate, root } = await getGcpCertPems()
+  const { leaf, intermediate, root } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
   const tamperedRoot = tamperPemSignature(root)
-  const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
+  const noEmbedded = rebuildTdxQuoteWithCertData(quoteBuf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -404,9 +398,12 @@ test.serial(
   async (t) => {
     const quoteB64 = getGcpQuoteBase64()
     const quoteBuf = Buffer.from(quoteB64, "base64")
-    const { leaf, intermediate, root } = await getGcpCertPems()
+    const { leaf, intermediate, root } = await getCertPemsFromQuote(
+      scureBase64.decode(getGcpQuoteBase64()),
+      { tdx: true },
+    )
     const tamperedIntermediate = tamperPemSignature(intermediate)
-    const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
+    const noEmbedded = rebuildTdxQuoteWithCertData(quoteBuf, Buffer.alloc(0))
     const err = await t.throwsAsync(
       async () =>
         await verifyTdx(noEmbedded, {
@@ -423,9 +420,12 @@ test.serial(
 test.serial("Reject a V4 TDX quote, invalid leaf cert signature", async (t) => {
   const quoteB64 = getGcpQuoteBase64()
   const quoteBuf = Buffer.from(quoteB64, "base64")
-  const { leaf, intermediate, root } = await getGcpCertPems()
+  const { leaf, intermediate, root } = await getCertPemsFromQuote(
+    scureBase64.decode(getGcpQuoteBase64()),
+    { tdx: true },
+  )
   const tamperedLeaf = tamperPemSignature(leaf)
-  const noEmbedded = rebuildQuoteWithCertData(quoteBuf, Buffer.alloc(0))
+  const noEmbedded = rebuildTdxQuoteWithCertData(quoteBuf, Buffer.alloc(0))
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(noEmbedded, {
@@ -527,7 +527,7 @@ test.serial(
   async (t) => {
     const quoteB64 = getGcpQuoteBase64()
     const base = Buffer.from(quoteB64, "base64")
-    const noEmbedded = rebuildQuoteWithCertData(base, Buffer.alloc(0))
+    const noEmbedded = rebuildTdxQuoteWithCertData(base, Buffer.alloc(0))
     const err = await t.throwsAsync(
       async () => await verifyTdx(noEmbedded, { date: BASE_TIME, crls: [] }),
     )
