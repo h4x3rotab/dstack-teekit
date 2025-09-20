@@ -1,28 +1,9 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "node16",
-    "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "node16",
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "jsx": "react-jsx",
-
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowImportingTsExtensions": true,
-
-    /* Types */
-    "typeRoots": ["./types", "./node_modules/@types"],
-    "types": ["node"]
-  },
-  "include": ["src", "qvl", "tunnel", "server", "test", "types"]
+	"files": [],
+	"exclude": ["**/vite.config.ts"],
+	"references": [
+		{ "path": "./packages/ra-https-demo" },
+		{ "path": "./packages/ra-https-qvl" },
+		{ "path": "./packages/ra-https-tunnel" }
+  ]
 }

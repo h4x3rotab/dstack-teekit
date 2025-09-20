@@ -9,11 +9,10 @@ import {
   BroadcastMessage,
 } from "./types.ts"
 
-import { RA } from "../tunnel/server.ts"
-import { ServerRAMockWebSocket } from "../tunnel/ServerRAWebSocket.ts"
+import { TunnelServer, ServerRAMockWebSocket } from "ra-https-tunnel"
 
 const app = express()
-const { server, wss } = await RA.initialize(app)
+const { server, wss } = await TunnelServer.initialize(app)
 
 app.use(cors())
 app.use(express.json())

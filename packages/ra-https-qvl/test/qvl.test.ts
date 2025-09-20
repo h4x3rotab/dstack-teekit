@@ -1,5 +1,4 @@
 import test from "ava"
-import { QV_X509Certificate } from "../qvl/index.js"
 import fs from "node:fs"
 import { base64 as scureBase64 } from "@scure/base"
 
@@ -13,7 +12,8 @@ import {
   verifyTdxBase64,
   getTdx10SignedRegion,
   normalizeSerialHex,
-} from "../qvl/index.js"
+  QV_X509Certificate,
+} from "ra-https-qvl"
 import {
   tamperPemSignature,
   buildCRL,

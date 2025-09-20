@@ -8,16 +8,22 @@ import {
 } from "react"
 import "./App.css"
 
+import { TunnelClient } from "ra-https-tunnel"
+import { verifyTdxBase64, verifySgxBase64 } from "ra-https-qvl"
+
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
-import { RA } from "../tunnel/client.js"
-import { tappdV4Base64, trusteeV5Base64, occlumSgxBase64 } from "./samples/samples.js"
+import {
+  tappdV4Base64,
+  trusteeV5Base64,
+  occlumSgxBase64,
+} from "./samples/samples.js"
 
 const baseUrl =
   document.location.hostname === "localhost"
     ? "http://localhost:3001"
     : "https://ra-https.up.railway.app"
-const ra = await RA.initialize(baseUrl)
+const ra = await TunnelClient.initialize(baseUrl)
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -150,19 +156,17 @@ function App() {
   const verifyTdxInBrowser = useCallback(async () => {
     setVerifyResult("Verifying TDX quote...")
     try {
-      const qvl = await import(/* @vite-ignore */ "../qvl/index.js")
-
-      const ok = await qvl.verifyTdxBase64(tappdV4Base64, {
+      const ok = await verifyTdxBase64(tappdV4Base64, {
         date: Date.parse("2025-09-01"),
         crls: [],
       })
 
-      const ok2 = await qvl.verifyTdxBase64(trusteeV5Base64, {
+      const ok2 = await verifyTdxBase64(trusteeV5Base64, {
         date: Date.parse("2025-09-01"),
         crls: [],
       })
 
-      const ok3 = await qvl.verifySgxBase64(occlumSgxBase64, {
+      const ok3 = await verifySgxBase64(occlumSgxBase64, {
         date: Date.parse("2025-09-01"),
         crls: [],
       })
@@ -173,7 +177,9 @@ function App() {
       }
       setVerifyResult("❌ Verification returned false")
     } catch (err) {
-      setVerifyResult(`Failed to import/parse QVL: ${(err as Error)?.message || err}`)
+      setVerifyResult(
+        `Failed to import/parse QVL: ${(err as Error)?.message || err}`,
+      )
       throw err
     }
   }, [])

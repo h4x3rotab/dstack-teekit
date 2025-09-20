@@ -2,8 +2,7 @@ import test from "ava"
 import express, { Request, Response } from "express"
 import type { AddressInfo } from "node:net"
 
-import { RA as TunnelServer } from "../tunnel/server.ts"
-import { RA as TunnelClient } from "../tunnel/client.ts"
+import { TunnelClient, TunnelServer } from "ra-https-tunnel"
 
 // Ensure timers don't keep the process alive (client sets 30s timeouts)
 const originalSetTimeout = setTimeout

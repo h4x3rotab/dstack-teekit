@@ -316,7 +316,7 @@ export class RA {
       constructor(url: string, protocols?: string | string[]) {
         super(self, url, protocols)
       }
-    }
+    } as any // TODO
   }
 
   get fetch() {
@@ -330,8 +330,8 @@ export class RA {
         typeof input === "string"
           ? input
           : input instanceof URL
-          ? input.toString()
-          : input.url
+            ? input.toString()
+            : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 

@@ -7,7 +7,7 @@ import {
   getTdx15SignedRegion,
   QV_X509Certificate,
   normalizeSerialHex,
-} from "../qvl/index.js"
+} from "ra-https-qvl"
 import {
   rebuildTdxQuoteWithCertData,
   tamperPemSignature,

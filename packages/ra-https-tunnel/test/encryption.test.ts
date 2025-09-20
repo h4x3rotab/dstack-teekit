@@ -4,8 +4,7 @@ import type { AddressInfo } from "node:net"
 import { WebSocket } from "ws"
 import sodium from "libsodium-wrappers"
 
-import { RA as TunnelServer } from "../tunnel/server.ts"
-import { RA as TunnelClient } from "../tunnel/client.ts"
+import { TunnelClient, TunnelServer } from "ra-https-tunnel"
 
 async function startTunnelApp() {
   await sodium.ready

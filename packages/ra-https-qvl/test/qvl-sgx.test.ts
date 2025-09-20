@@ -8,7 +8,7 @@ import {
   extractPemCertificates,
   getSgxSignedRegion,
   normalizeSerialHex,
-} from "../qvl/index.js"
+} from "ra-https-qvl"
 import {
   rebuildSgxQuoteWithCertData,
   tamperPemSignature,

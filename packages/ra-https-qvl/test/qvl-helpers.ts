@@ -8,7 +8,7 @@ import {
   verifyPCKChain,
   computeCertSha256Hex,
   QV_X509Certificate,
-} from "../qvl/index.js"
+} from "ra-https-qvl"
 
 export function pemToDer(pem: string): Buffer {
   const b64 = pem
