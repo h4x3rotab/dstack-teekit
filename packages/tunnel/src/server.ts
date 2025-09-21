@@ -33,7 +33,39 @@ import {
   ServerRAMockWebSocketServer,
 } from "./ServerRAWebSocket.js"
 
-export class RA {
+/**
+ * Virtual server for remote-attested encrypted channels.
+ *
+ * For HTTP requests, the virtual server binds to an Express server,
+ * and decrypts and forwards requests to it.
+ *
+ * For Websockets, use the `wss` instance as a regular WebSocket server,
+ * and messages will be encrypted and decrypted in-flight.
+ *
+ * ```
+ * const { wss, server } = await TunnelServer.initialize(app)
+ *
+ * wss.on("connection", (ws: WebSocket) => {
+ *   // Handle incoming messages
+ *   ws.on("message", (data: Buffer) => { ... })
+ *
+ *   // Send an initial message
+ *   ws.send(...)
+ *
+ *   // Handle disconnects
+ *   ws.on("close", () => { ... })
+ * })
+ * ```
+ *
+ * You must use server.listen() to bind to a port:
+ *
+ * ```
+ * server.listen(process.env.PORT, () => {
+ *   console.log(`Server running on port ${PORT}`)
+ * })
+ * ```
+ */
+export class TunnelServer {
   public server: http.Server
   public wss: ServerRAMockWebSocketServer
   private controlWss: WebSocketServer
@@ -77,10 +109,10 @@ export class RA {
     })
   }
 
-  static async initialize(app: Express): Promise<RA> {
+  static async initialize(app: Express): Promise<TunnelServer> {
     await sodium.ready
     const { publicKey, privateKey } = sodium.crypto_box_keypair()
-    return new RA(app, publicKey, privateKey)
+    return new TunnelServer(app, publicKey, privateKey)
   }
 
   /**
@@ -131,7 +163,7 @@ export class RA {
           const data = args[0] as Buffer
           try {
             let message = JSON.parse(data.toString())
-            const ra = (this as any).ra as RA
+            const ra = (this as any).ra as TunnelServer
 
             // Handle client key exchange
             if (isControlChannelKXConfirm(message)) {

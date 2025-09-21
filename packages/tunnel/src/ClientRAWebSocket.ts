@@ -4,7 +4,7 @@ import {
   RAEncryptedClientCloseEvent,
   RAEncryptedServerEvent,
 } from "./types.js"
-import { RA } from "./client.js"
+import { TunnelClient } from "./client.js"
 import {
   generateConnectionId,
   getOriginPort,
@@ -32,10 +32,10 @@ export class ClientRAMockWebSocket extends EventTarget {
   public onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null
   public onerror: ((this: WebSocket, ev: Event) => any) | null = null
 
-  private ra: RA
+  private ra: TunnelClient
   private messageQueue: string[] = []
 
-  constructor(ra: RA, url: string, protocols?: string | string[]) {
+  constructor(ra: TunnelClient, url: string, protocols?: string | string[]) {
     super()
     this.ra = ra
     this.url = url

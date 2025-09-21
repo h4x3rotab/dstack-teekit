@@ -19,7 +19,19 @@ import {
 import { generateRequestId } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 
-export class RA {
+/**
+ * Client for opening an encrypted remote-attested channel.
+ *
+ * const enc = await TunnelClient.initialize(baseUrl)
+ *
+ * enc.fetch("https://...")
+ *
+ * const ws = new enc.WebSocket(wsUrl)
+ * ws.onMessage = (event: MessageEvent) => { ... }
+ * ws.onOpen = () => { ... }
+ * ws.onClose = () => { ... }
+ */
+export class TunnelClient {
   public id: string
   public ws: WebSocket | null = null
 
@@ -38,9 +50,9 @@ export class RA {
     this.id = Math.random().toString().slice(2)
   }
 
-  static async initialize(origin: string): Promise<RA> {
+  static async initialize(origin: string): Promise<TunnelClient> {
     await sodium.ready
-    return new RA(origin)
+    return new TunnelClient(origin)
   }
 
   /**
@@ -330,8 +342,8 @@ export class RA {
         typeof input === "string"
           ? input
           : input instanceof URL
-            ? input.toString()
-            : input.url
+          ? input.toString()
+          : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 

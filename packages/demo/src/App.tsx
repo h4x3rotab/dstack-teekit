@@ -23,7 +23,8 @@ const baseUrl =
   document.location.hostname === "localhost"
     ? "http://localhost:3001"
     : "https://ra-https.up.railway.app"
-const ra = await TunnelClient.initialize(baseUrl)
+
+const enc = await TunnelClient.initialize(baseUrl)
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -45,7 +46,7 @@ function App() {
 
   const fetchUptime = useCallback(async () => {
     try {
-      const response = await ra.fetch(baseUrl + "/uptime")
+      const response = await enc.fetch(baseUrl + "/uptime")
       const data: UptimeData = await response.json()
       setUptime(data.uptime.formatted)
     } catch (error) {
@@ -55,8 +56,8 @@ function App() {
 
   const disconnectRA = useCallback(() => {
     try {
-      if (ra.ws) {
-        ra.ws.close(4000, "simulate disconnect")
+      if (enc.ws) {
+        enc.ws.close(4000, "simulate disconnect")
       }
     } catch (e) {
       console.error("Failed to close RA WebSocket:", e)
@@ -82,7 +83,7 @@ function App() {
     const wsUrl = baseUrl
       .replace(/^http:\/\//, "ws://")
       .replace(/^https:\/\//, "wss://")
-    const ws = new ra.WebSocket(wsUrl)
+    const ws = new enc.WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
