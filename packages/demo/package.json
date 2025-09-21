@@ -6,8 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
     "server": "tsx server/server.ts",
     "start": "concurrently \"npm run server\" \"npm run dev\"",
     "test": "echo 'No tests'"
