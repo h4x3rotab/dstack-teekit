@@ -4,5 +4,5 @@
 	"compilerOptions": {
 		"noEmit": true
 	},
-	"references": [{ "path": "../ra-https-qvl" }, { "path": "../ra-https-tunnel" }]
+	"references": [{ "path": "../qvl" }, { "path": "../tunnel" }]
 }

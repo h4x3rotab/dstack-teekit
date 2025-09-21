@@ -4,19 +4,18 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "clean": "rm -rf packages/*/dist/* packages/*/*.tsbuildinfo",
     "typecheck": "tsc --build --watch",
     "build": "npm --workspaces run build",
     "lint": "eslint .",
-    "dev": "npm --workspace packages/ra-https-demo run dev",
-    "preview": "npm --workspace packages/ra-https-demo run preview",
-    "server": "npm --workspace packages/ra-https-demo run server",
-    "start": "npm --workspace packages/ra-https-demo run start",
+    "dev": "npm --workspace packages/demo run dev",
+    "preview": "npm --workspace packages/demo run preview",
+    "server": "npm --workspace packages/demo run server",
+    "start": "npm --workspace packages/demo run start",
     "test": "npm --workspaces run test"
   },
   "workspaces": [
-    "packages/ra-https-qvl",
-    "packages/ra-https-tunnel",
-    "packages/ra-https-demo"
+    "packages/*"
   ],
   "dependencies": {
     "tsx": "^4.20.5"

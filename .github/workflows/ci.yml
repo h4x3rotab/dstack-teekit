@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Run qvl tests
-        run: npm --workspace packages/ra-https-qvl run test
+        run: npm --workspace packages/qvl run test
 
   tunnel-tests:
     name: Tunnel tests
@@ -40,4 +40,4 @@ jobs:
       - name: Build
         run: npm run build
       - name: Run tunnel tests
-        run: npm --workspace packages/ra-https-tunnel run test
+        run: npm --workspace packages/tunnel run test

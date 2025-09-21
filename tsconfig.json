@@ -2,8 +2,8 @@
 	"files": [],
 	"exclude": ["**/vite.config.ts"],
 	"references": [
-		{ "path": "./packages/ra-https-demo" },
-		{ "path": "./packages/ra-https-qvl" },
-		{ "path": "./packages/ra-https-tunnel" }
+		{ "path": "./packages/demo" },
+		{ "path": "./packages/qvl" },
+		{ "path": "./packages/tunnel" }
   ]
 }
