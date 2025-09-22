@@ -373,11 +373,14 @@ export class TunnelClient {
       return
     }
 
-    const syntheticResponse = new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    })
+    const syntheticResponse = new Response(
+      response.status === 204 ? null : response.body,
+      {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      },
+    )
 
     pending.resolve(syntheticResponse)
   }
