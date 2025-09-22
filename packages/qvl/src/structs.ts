@@ -289,9 +289,7 @@ export function parseTdxQuote(quote: Uint8Array): {
 } {
   const header = QuoteHeader.fromBuffer(quote)
   if (header.version === 4) {
-    const body = TdxQuoteBody_1_0.fromBuffer(
-      quote.subarray(QuoteHeader.size()),
-    )
+    const body = TdxQuoteBody_1_0.fromBuffer(quote.subarray(QuoteHeader.size()))
     const signature = parseTdxSignature(quote)
 
     return { header, body, signature }

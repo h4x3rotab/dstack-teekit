@@ -15,6 +15,7 @@ import {
 } from "./utils.js"
 import { intelSgxRootCaPem } from "./rootCa.js"
 import { base64 as scureBase64 } from "@scure/base"
+import { SgxQuote } from "./verifySgx.js"
 
 export interface VerifyConfig {
   crls: Uint8Array[]
@@ -414,4 +415,10 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
 
 export async function verifyTdxBase64(quote: string, config?: VerifyConfig) {
   return await verifyTdx(scureBase64.decode(quote), config)
+}
+
+export type TdxQuote = ReturnType<typeof parseTdxQuote>
+
+export function isTdxQuote(quote: SgxQuote | TdxQuote): quote is TdxQuote {
+  return quote.header.tee_type === 129
 }

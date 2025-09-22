@@ -7,5 +7,5 @@
 		"module": "Node16",
 		"moduleResolution": "Node16"
 	},
-	"references": [{ "path": "../." }, { "path": "../../ra-https-qvl" }]
+	"references": [{ "path": "../." }, { "path": "../../qvl" }]
 }

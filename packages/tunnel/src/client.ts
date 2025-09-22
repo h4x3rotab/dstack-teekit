@@ -1,5 +1,16 @@
 import sodium from "libsodium-wrappers"
 import {
+  hex,
+  parseSgxQuote,
+  parseTdxQuote,
+  SgxQuote,
+  TdxQuote,
+  verifySgx,
+  verifyTdx,
+} from "ra-https-qvl"
+import { base64 as scureBase64 } from "@scure/base"
+
+import {
   RAEncryptedHTTPRequest,
   RAEncryptedHTTPResponse,
   RAEncryptedServerEvent,
@@ -19,10 +30,23 @@ import {
 import { generateRequestId } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 
+export type TunnelClientConfig = {
+  mrtd?: string
+  report_data?: string
+  match?: (quote: TdxQuote | SgxQuote) => boolean
+  sgx?: boolean // default to TDX
+}
+
 /**
  * Client for opening an encrypted remote-attested channel.
  *
- * const enc = await TunnelClient.initialize(baseUrl)
+ * const enc = await TunnelClient.initialize(baseUrl, {
+ *   mtrd: 'any',
+ *   report_data: '0000....',
+ *   match: (quote) => {
+ *     return true // custom validation logic goes here
+ *   }
+ * })
  *
  * enc.fetch("https://...")
  *
@@ -45,14 +69,22 @@ export class TunnelClient {
   private webSocketConnections = new Map<string, ClientRAMockWebSocket>()
   private reconnectDelay = 1000
   private connectionPromise: Promise<void> | null = null
+  private config: TunnelClientConfig
 
-  private constructor(public readonly origin: string) {
+  private constructor(
+    public readonly origin: string,
+    config: TunnelClientConfig,
+  ) {
     this.id = Math.random().toString().slice(2)
+    this.config = config
   }
 
-  static async initialize(origin: string): Promise<TunnelClient> {
+  static async initialize(
+    origin: string,
+    config: TunnelClientConfig,
+  ): Promise<TunnelClient> {
     await sodium.ready
-    return new TunnelClient(origin)
+    return new TunnelClient(origin, config)
   }
 
   /**
@@ -150,59 +182,103 @@ export class TunnelClient {
         reject(new Error("WebSocket connection failed"))
       }
 
-      this.ws.onmessage = (event) => {
+      this.ws.onmessage = async (event) => {
+        let message
         try {
-          const message = JSON.parse(event.data)
-          if (isControlChannelKXAnnounce(message)) {
-            try {
-              const serverPub = sodium.from_base64(
-                message.x25519PublicKey,
-                sodium.base64_variants.ORIGINAL,
-              )
-
-              const symmetricKey = sodium.crypto_secretbox_keygen()
-              const sealed = sodium.crypto_box_seal(symmetricKey, serverPub)
-
-              this.serverX25519PublicKey = serverPub
-              this.symmetricKey = symmetricKey
-
-              const reply: ControlChannelKXConfirm = {
-                type: "client_kx",
-                sealedSymmetricKey: sodium.to_base64(
-                  sealed,
-                  sodium.base64_variants.ORIGINAL,
-                ),
-              }
-              this.send(reply)
-
-              this.connectionPromise = null
-              console.log("Opened encrypted channel to", this.origin)
-              resolve()
-            } catch (e) {
-              this.connectionPromise = null
-              reject(
-                e instanceof Error
-                  ? e
-                  : new Error("Failed to process server_kx message"),
-              )
-            }
-          } else if (isControlChannelEncryptedMessage(message)) {
-            // Decrypt and dispatch
-            if (!this.symmetricKey) {
-              throw new Error("Missing symmetric key for encrypted message")
-            }
-            const decrypted = this.#decryptEnvelope(message)
-
-            if (isRAEncryptedHTTPResponse(decrypted)) {
-              this.#handleTunnelResponse(decrypted)
-            } else if (isRAEncryptedServerEvent(decrypted)) {
-              this.#handleWebSocketTunnelEvent(decrypted)
-            } else if (isRAEncryptedWSMessage(decrypted)) {
-              this.#handleWebSocketTunnelMessage(decrypted)
-            }
-          }
+          message = JSON.parse(event.data)
         } catch (error) {
           console.error("Error parsing WebSocket message:", error)
+        }
+
+        if (isControlChannelKXAnnounce(message)) {
+          let valid, validQuote, mrtd, report_data
+
+          // Parse and validate quote provided by the control channel
+          if (!message.quote || message.quote.length === 0) {
+            throw new Error("Error opening channel: empty quote")
+          }
+          const quote = scureBase64.decode(message.quote)
+          if (this.config.sgx) {
+            valid = await verifySgx(quote)
+            validQuote = parseSgxQuote(quote)
+            mrtd = validQuote.body.mr_enclave
+            report_data = validQuote.body.report_data
+          } else {
+            valid = await verifyTdx(quote)
+            validQuote = parseTdxQuote(quote)
+            mrtd = validQuote.body.mr_td
+            report_data = validQuote.body.report_data
+          }
+
+          if (!valid) {
+            throw new Error("Error opening channel: invalid quote")
+          }
+          if (
+            this.config.mrtd !== undefined &&
+            hex(mrtd) !== this.config.mrtd
+          ) {
+            throw new Error("Error opening channel: invalid mrtd")
+          }
+          if (
+            this.config.report_data !== undefined &&
+            hex(report_data) !== this.config.report_data
+          ) {
+            throw new Error("Error opening channel: invalid report_data")
+          }
+          if (
+            this.config.match !== undefined &&
+            this.config.match(validQuote) !== true
+          ) {
+            throw new Error("Error opening channel: custom validation failed")
+          }
+
+          // Generate and send a symmetric encryption key
+          try {
+            const serverPub = sodium.from_base64(
+              message.x25519PublicKey,
+              sodium.base64_variants.ORIGINAL,
+            )
+
+            const symmetricKey = sodium.crypto_secretbox_keygen()
+            const sealed = sodium.crypto_box_seal(symmetricKey, serverPub)
+
+            this.serverX25519PublicKey = serverPub
+            this.symmetricKey = symmetricKey
+
+            const reply: ControlChannelKXConfirm = {
+              type: "client_kx",
+              sealedSymmetricKey: sodium.to_base64(
+                sealed,
+                sodium.base64_variants.ORIGINAL,
+              ),
+            }
+            this.send(reply)
+
+            this.connectionPromise = null
+            console.log("Opened encrypted channel to", this.origin)
+            resolve()
+          } catch (e) {
+            this.connectionPromise = null
+            reject(
+              e instanceof Error
+                ? e
+                : new Error("Failed to process server_kx message"),
+            )
+          }
+        } else if (isControlChannelEncryptedMessage(message)) {
+          // Decrypt and dispatch
+          if (!this.symmetricKey) {
+            throw new Error("Missing symmetric key for encrypted message")
+          }
+          const decrypted = this.#decryptEnvelope(message)
+
+          if (isRAEncryptedHTTPResponse(decrypted)) {
+            this.#handleTunnelResponse(decrypted)
+          } else if (isRAEncryptedServerEvent(decrypted)) {
+            this.#handleWebSocketTunnelEvent(decrypted)
+          } else if (isRAEncryptedWSMessage(decrypted)) {
+            this.#handleWebSocketTunnelMessage(decrypted)
+          }
         }
       }
     })
@@ -342,8 +418,8 @@ export class TunnelClient {
         typeof input === "string"
           ? input
           : input instanceof URL
-          ? input.toString()
-          : input.url
+            ? input.toString()
+            : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 

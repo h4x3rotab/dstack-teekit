@@ -4,6 +4,8 @@
 	"references": [
 		{ "path": "./packages/demo" },
 		{ "path": "./packages/qvl" },
-		{ "path": "./packages/tunnel" }
+		{ "path": "./packages/qvl/test" },
+		{ "path": "./packages/tunnel" },
+		{ "path": "./packages/tunnel/test" }
   ]
 }

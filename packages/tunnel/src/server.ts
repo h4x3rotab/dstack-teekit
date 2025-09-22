@@ -66,12 +66,13 @@ import {
  * ```
  */
 export class TunnelServer {
-  public server: http.Server
-  public wss: ServerRAMockWebSocketServer
-  private controlWss: WebSocketServer
+  public readonly server: http.Server
+  public readonly quote: Uint8Array
+  public readonly wss: ServerRAMockWebSocketServer
+  private readonly controlWss: WebSocketServer
 
-  public x25519PublicKey: Uint8Array
-  private x25519PrivateKey: Uint8Array
+  public readonly x25519PublicKey: Uint8Array
+  private readonly x25519PrivateKey: Uint8Array
 
   private webSocketConnections = new Map<
     string,
@@ -81,10 +82,12 @@ export class TunnelServer {
 
   private constructor(
     private app: Express,
+    quote: Uint8Array,
     publicKey: Uint8Array,
     privateKey: Uint8Array,
   ) {
     this.app = app
+    this.quote = quote
     this.x25519PublicKey = publicKey
     this.x25519PrivateKey = privateKey
     this.server = http.createServer(app)
@@ -109,10 +112,13 @@ export class TunnelServer {
     })
   }
 
-  static async initialize(app: Express): Promise<TunnelServer> {
+  static async initialize(
+    app: Express,
+    quote: Uint8Array,
+  ): Promise<TunnelServer> {
     await sodium.ready
     const { publicKey, privateKey } = sodium.crypto_box_keypair()
-    return new TunnelServer(app, publicKey, privateKey)
+    return new TunnelServer(app, quote, publicKey, privateKey)
   }
 
   /**
@@ -130,6 +136,7 @@ export class TunnelServer {
         const serverKxMessage = {
           type: "server_kx",
           x25519PublicKey: Buffer.from(this.x25519PublicKey).toString("base64"),
+          quote: Buffer.from(this.quote).toString("base64"),
         }
         controlWs.send(JSON.stringify(serverKxMessage))
       } catch (e) {

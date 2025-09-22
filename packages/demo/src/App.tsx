@@ -17,14 +17,19 @@ import {
   tappdV4Base64,
   trusteeV5Base64,
   occlumSgxBase64,
-} from "./samples/samples.js"
+} from "../shared/samples.js"
 
 const baseUrl =
   document.location.hostname === "localhost"
     ? "http://localhost:3001"
     : "https://ra-https.up.railway.app"
 
-const enc = await TunnelClient.initialize(baseUrl)
+const enc = await TunnelClient.initialize(baseUrl, {
+  match: (quote) => {
+    console.log(quote)
+    return true
+  },
+})
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])

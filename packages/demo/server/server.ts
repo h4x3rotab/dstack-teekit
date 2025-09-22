@@ -1,18 +1,20 @@
 import express from "express"
 import cors from "cors"
 import { WebSocket } from "ws"
+import { TunnelServer, ServerRAMockWebSocket } from "ra-https-tunnel"
+import { base64 } from "@scure/base"
 
 import {
   Message,
   IncomingChatMessage,
   BacklogMessage,
   BroadcastMessage,
-} from "./types.ts"
-
-import { TunnelServer, ServerRAMockWebSocket } from "ra-https-tunnel"
+} from "./types.js"
+import { tappdV4Base64 } from "../shared/samples.js"
 
 const app = express()
-const { server, wss } = await TunnelServer.initialize(app)
+const quote = base64.decode(tappdV4Base64)
+const { server, wss } = await TunnelServer.initialize(app, quote)
 
 app.use(cors())
 app.use(express.json())

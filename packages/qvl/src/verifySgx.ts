@@ -6,6 +6,7 @@ import {
 } from "./utils.js"
 import {
   DEFAULT_PINNED_ROOT_CERTS,
+  TdxQuote,
   VerifyConfig,
   verifyPCKChain,
 } from "./verifyTdx.js"
@@ -237,4 +238,10 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
 
 export async function verifySgxBase64(quote: string, config?: VerifyConfig) {
   return await verifySgx(scureBase64.decode(quote), config)
+}
+
+export type SgxQuote = ReturnType<typeof parseSgxQuote>
+
+export function isSgxQuote(quote: SgxQuote | TdxQuote): quote is SgxQuote {
+  return quote.header.tee_type === 0
 }
