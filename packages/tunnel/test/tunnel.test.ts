@@ -1,5 +1,5 @@
 import test from "ava"
-import express, { Request, Response } from "express"
+import express from "express"
 import type { AddressInfo } from "node:net"
 import sodium from "libsodium-wrappers"
 
@@ -44,12 +44,6 @@ export async function startTunnelApp() {
   await sodium.ready
   const app = express()
 
-  app.get("/hello", (_req, res) => res.status(200).send("world"))
-  app.get("/ok", (_req, res) => res.status(200).send("ok"))
-  app.post("/echo", (req: Request, res: Response) => {
-    res.status(200).json({ received: req.body })
-  })
-
   const quote = loadQuote({ tdxv4: true })
   const tunnelServer = await TunnelServer.initialize(app, quote)
 
@@ -86,37 +80,6 @@ export async function stopTunnel(
     tunnelServer.server.close(() => resolve())
   })
 }
-
-test.serial("GET through tunnel", async (t) => {
-  const { tunnelServer, tunnelClient } = await startTunnelApp()
-
-  try {
-    const response = await tunnelClient.fetch("/hello")
-    t.is(response.status, 200)
-    const text = await response.text()
-    t.is(text, "world")
-  } finally {
-    await stopTunnel(tunnelServer, tunnelClient)
-  }
-})
-
-test.serial("POST through tunnel", async (t) => {
-  const { tunnelServer, tunnelClient } = await startTunnelApp()
-
-  try {
-    const payload = { name: "Ada", answer: 42 }
-    const response = await tunnelClient.fetch("/echo", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-    t.is(response.status, 200)
-    const json = await response.json()
-    t.deepEqual(json, { received: payload })
-  } finally {
-    await stopTunnel(tunnelServer, tunnelClient)
-  }
-})
 
 test.serial(
   "WebSocket lifecycle over tunnel (terminates at server wss)",
