@@ -6,7 +6,7 @@
   "scripts": {
     "clean": "rm -rf packages/*/dist/* packages/*/*.tsbuildinfo",
     "typecheck": "tsc --build --watch",
-    "build": "npm --workspaces run build",
+    "build": "npm --workspace packages/qvl --workspace packages/tunnel run build && npm --workspace packages/demo run build",
     "lint": "eslint .",
     "dev": "npm --workspace packages/demo run dev",
     "preview": "npm --workspace packages/demo run preview",
