@@ -6,15 +6,7 @@ import sodium from "libsodium-wrappers"
 import { TunnelClient, TunnelServer } from "ra-https-tunnel"
 import { hex, parseTdxQuote } from "ra-https-qvl"
 
-import { loadQuote } from "./tunnel.test.js"
-
-// Ensure timers don't keep `npx ava --watch` alive (client sets 30s timeouts)
-const originalSetTimeout = setTimeout
-;(globalThis as any).setTimeout = ((fn: any, ms?: any, ...args: any[]) => {
-  const handle: any = (originalSetTimeout as any)(fn, ms, ...args)
-  if (handle && typeof handle.unref === "function") handle.unref()
-  return handle
-}) as any
+import { loadQuote } from "./helpers/helpers.js"
 
 async function startTunnelFetchApp() {
   await sodium.ready

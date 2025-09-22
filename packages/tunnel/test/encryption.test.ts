@@ -6,7 +6,7 @@ import sodium from "libsodium-wrappers"
 import { encode, decode } from "cbor-x"
 
 import { TunnelServer } from "ra-https-tunnel"
-import { loadQuote, startTunnelApp, stopTunnel } from "./tunnel.test.js"
+import { loadQuote, startTunnelApp, stopTunnel } from "./helpers/helpers.js"
 
 test.serial(
   "Server sends only encrypted envelope messages after handshake",
