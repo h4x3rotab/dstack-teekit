@@ -95,6 +95,7 @@ test.serial(
       })
       t.is(serverKx.type, "server_kx")
 
+      // Send plaintext before handshake; server should drop
       const badPlaintextReq = {
         type: "http_request",
         requestId: "r1",
@@ -102,8 +103,6 @@ test.serial(
         url: "/hello",
         headers: {},
       }
-
-      // Send plaintext before handshake; server should drop
       ws.send(JSON.stringify(badPlaintextReq))
       const noReplyEarly = await Promise.race([
         new Promise<boolean>((resolve) =>

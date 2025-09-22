@@ -185,19 +185,22 @@ export class TunnelClient {
       }
 
       this.ws.onmessage = async (event) => {
+        // Normalize incoming bytes in WebSocket messages
         let message
         try {
           let bytes: Uint8Array
-          if (typeof (event as any).data === "string") {
-            const str = (event as any).data as string
-            bytes = new TextEncoder().encode(str)
-          } else if ((event as any).data instanceof ArrayBuffer) {
-            bytes = new Uint8Array((event as any).data as ArrayBuffer)
-          } else if (typeof (event as any).data?.arrayBuffer === "function") {
-            const buf = await (event as any).data.arrayBuffer()
+          if (typeof event.data === "string") {
+            // Handle data encoded as string
+            bytes = new TextEncoder().encode(event.data)
+          } else if (event.data instanceof ArrayBuffer) {
+            // Handle all ArrayBuffers as Uint8Array
+            bytes = new Uint8Array(event.data)
+          } else if (typeof event.data?.arrayBuffer === "function") {
+            // Handle Blob-like payloads from browser WebSockets
+            const buf = await event.data.arrayBuffer()
             bytes = new Uint8Array(buf)
           } else {
-            bytes = new Uint8Array((event as any).data)
+            bytes = new Uint8Array(event.data)
           }
           message = decode(bytes)
         } catch (error) {
@@ -305,7 +308,7 @@ export class TunnelClient {
    */
   public send(message: RAEncryptedMessage | ControlChannelKXConfirm): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Allow plaintext only for client_kx during handshake (CBOR-framed)
+      // Send unencrypted client_kx confirm messages during handshake
       if (isControlChannelKXConfirm(message)) {
         const data = encode(message)
         this.ws.send(data)

@@ -168,100 +168,104 @@ export class TunnelServer {
 
       controlWs.emit = function (event: string, ...args: any[]): boolean {
         if (event === "message") {
-          const data = args[0] as Buffer
+          // Decode incoming message from client
+          let message
           try {
-            let message = decode(new Uint8Array(data))
-            const ra = (this as any).ra as TunnelServer
+            const data = args[0] as Buffer
+            message = decode(new Uint8Array(data))
+          } catch (error: any) {
+            console.error("Received invalid CBOR message")
+            return true
+          }
 
-            // Handle client key exchange
-            if (isControlChannelKXConfirm(message)) {
-              try {
-                // Only accept a single symmetric key per WebSocket
-                if (!ra.symmetricKeyBySocket.has(controlWs)) {
-                  const sealed = sodium.from_base64(
-                    message.sealedSymmetricKey,
-                    sodium.base64_variants.ORIGINAL,
-                  )
-                  const opened = sodium.crypto_box_seal_open(
-                    sealed,
-                    ra.x25519PublicKey,
-                    ra.x25519PrivateKey,
-                  )
-                  ra.symmetricKeyBySocket.set(controlWs, opened)
-                } else {
-                  console.warn(
-                    "client_kx received after key already set; ignoring",
-                  )
-                }
-              } catch (e) {
-                console.error("Failed to process client_kx:", e)
-              }
-              return true
-            }
+          const ra = (this as any).ra as TunnelServer
 
-            // If handshake not complete yet, ignore any other messages
-            if (!ra.symmetricKeyBySocket.has(controlWs)) {
-              console.warn("Dropping message before handshake completion")
-              return true
-            }
-
-            // Require encryption post-handshake
-            if (!isControlChannelEncryptedMessage(message)) {
-              console.warn("Dropping non-encrypted message post-handshake")
-              return true
-            }
-
-            // Decrypt envelope messages post-handshake
-            if (isControlChannelEncryptedMessage(message)) {
-              try {
-                message = ra.#decryptEnvelopeForSocket(
-                  controlWs,
-                  message as ControlChannelEncryptedMessage,
+          // Handle client key exchange
+          if (isControlChannelKXConfirm(message)) {
+            try {
+              // Only accept a single symmetric key per WebSocket
+              if (!ra.symmetricKeyBySocket.has(controlWs)) {
+                const sealed = sodium.from_base64(
+                  message.sealedSymmetricKey,
+                  sodium.base64_variants.ORIGINAL,
                 )
-              } catch (e) {
-                console.error("Failed to decrypt envelope:", e)
-                return true
+                const opened = sodium.crypto_box_seal_open(
+                  sealed,
+                  ra.x25519PublicKey,
+                  ra.x25519PrivateKey,
+                )
+                ra.symmetricKeyBySocket.set(controlWs, opened)
+              } else {
+                console.warn(
+                  "client_kx received after key already set; ignoring",
+                )
               }
+            } catch (e) {
+              console.error("Failed to process client_kx:", e)
             }
+            return true
+          }
 
-            if (isRAEncryptedHTTPRequest(message)) {
-              ra.logWebSocketConnections()
-              console.log(
-                `Encrypted HTTP request (${message.requestId}): ${message.url}`,
-              )
-              ra.#handleTunnelHttpRequest(controlWs, message).catch(
-                (error: Error) => {
-                  console.error("Error handling encrypted request:", error)
+          // If handshake not complete yet, ignore any other messages
+          if (!ra.symmetricKeyBySocket.has(controlWs)) {
+            console.warn("Dropping message before handshake completion")
+            return true
+          }
 
-                  // Send 500 error response back to client
-                  try {
-                    ra.sendEncrypted(controlWs, {
-                      type: "http_response",
-                      requestId: message.requestId,
-                      status: 500,
-                      statusText: "Internal Server Error",
-                      headers: {},
-                      body: "",
-                      error: error.message,
-                    } as RAEncryptedHTTPResponse)
-                  } catch (sendError) {
-                    console.error("Failed to send error response:", sendError)
-                  }
-                },
+          // Require encryption post-handshake
+          if (!isControlChannelEncryptedMessage(message)) {
+            console.warn("Dropping non-encrypted message post-handshake")
+            return true
+          }
+
+          // Decrypt envelope messages post-handshake
+          if (isControlChannelEncryptedMessage(message)) {
+            try {
+              message = ra.#decryptEnvelopeForSocket(
+                controlWs,
+                message as ControlChannelEncryptedMessage,
               )
-              return true
-            } else if (isRAEncryptedClientConnectEvent(message)) {
-              ra.#handleTunnelWebSocketConnect(controlWs, message)
-              return true
-            } else if (isRAEncryptedWSMessage(message)) {
-              ra.#handleTunnelWebSocketMessage(message)
-              return true
-            } else if (isRAEncryptedClientCloseEvent(message)) {
-              ra.#handleTunnelWebSocketClose(message)
+            } catch (e) {
+              console.error("Failed to decrypt envelope:", e)
               return true
             }
-          } catch (error) {
-            console.error(error)
+          }
+
+          if (isRAEncryptedHTTPRequest(message)) {
+            ra.logWebSocketConnections()
+            console.log(
+              `Encrypted HTTP request (${message.requestId}): ${message.url}`,
+            )
+            ra.#handleTunnelHttpRequest(controlWs, message).catch(
+              (error: Error) => {
+                console.error("Error handling encrypted request:", error)
+
+                // Send 500 error response back to client
+                try {
+                  ra.sendEncrypted(controlWs, {
+                    type: "http_response",
+                    requestId: message.requestId,
+                    status: 500,
+                    statusText: "Internal Server Error",
+                    headers: {},
+                    body: "",
+                    error: error.message,
+                  } as RAEncryptedHTTPResponse)
+                } catch (sendError) {
+                  console.error("Failed to send error response:", sendError)
+                }
+              },
+            )
+            return true
+          } else if (isRAEncryptedClientConnectEvent(message)) {
+            ra.#handleTunnelWebSocketConnect(controlWs, message)
+            return true
+          } else if (isRAEncryptedWSMessage(message)) {
+            ra.#handleTunnelWebSocketMessage(message)
+            return true
+          } else if (isRAEncryptedClientCloseEvent(message)) {
+            ra.#handleTunnelWebSocketClose(message)
+            return true
           }
         }
 
