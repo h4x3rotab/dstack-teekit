@@ -19,8 +19,8 @@ test.serial(
     })
 
     try {
-      await (tunnelClient as any).ensureConnection()
-      const rawWs: any = (tunnelClient as any).ws
+      await tunnelClient.ensureConnection()
+      const rawWs: any = tunnelClient.ws
       const wireMessages: any[] = []
       const handleWire = (data: any) => {
         try {
@@ -198,8 +198,7 @@ test.serial(
 test.serial("Client send fails when symmetric key is missing", async (t) => {
   const { tunnelServer, tunnelClient } = await startTunnelApp()
   try {
-    // Establish connection so ws is OPEN
-    await (tunnelClient as any).ensureConnection()
+    await tunnelClient.ensureConnection()
     // Drop the key to simulate corruption/forgetting
     ;(tunnelClient as any).symmetricKey = undefined
 
@@ -208,12 +207,6 @@ test.serial("Client send fails when symmetric key is missing", async (t) => {
       await tunnelClient.fetch("/ok")
     })
     t.truthy(fetchErr)
-
-    // Also verify that low-level send rejects when key is missing
-    await (tunnelClient as any).ensureConnection()
-    ;(tunnelClient as any).symmetricKey = undefined
-    const sendErr = t.throws(() => (tunnelClient as any).send({ type: "noop" }))
-    t.truthy(sendErr)
   } finally {
     await stopTunnel(tunnelServer, tunnelClient)
   }

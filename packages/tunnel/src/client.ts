@@ -10,6 +10,7 @@ import {
 } from "ra-https-qvl"
 import { base64 as scureBase64 } from "@scure/base"
 import { encode, decode } from "cbor-x"
+import createDebug from "debug"
 
 import {
   RAEncryptedHTTPRequest,
@@ -37,6 +38,8 @@ export type TunnelClientConfig = {
   match?: (quote: TdxQuote | SgxQuote) => boolean
   sgx?: boolean // default to TDX
 }
+
+const debug = createDebug("ra-https:TunnelClient")
 
 /**
  * Client for opening an encrypted remote-attested channel.
@@ -272,7 +275,7 @@ export class TunnelClient {
             this.send(reply)
 
             this.connectionPromise = null
-            console.log("Opened encrypted channel to", this.origin)
+            debug("Opened encrypted channel to", this.origin)
             resolve()
           } catch (e) {
             this.connectionPromise = null
@@ -308,13 +311,14 @@ export class TunnelClient {
    */
   public send(message: RAEncryptedMessage | ControlChannelKXConfirm): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Send unencrypted client_kx confirm messages during handshake
+      // Send unencrypted client_kx messages during handshake
       if (isControlChannelKXConfirm(message)) {
         const data = encode(message)
         this.ws.send(data)
         return
       }
 
+      // Require encryption for all other messages
       if (!this.symmetricKey) {
         throw new Error("Encryption not ready: missing symmetric key")
       }
@@ -428,8 +432,8 @@ export class TunnelClient {
         typeof input === "string"
           ? input
           : input instanceof URL
-          ? input.toString()
-          : input.url
+            ? input.toString()
+            : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 

@@ -5,6 +5,7 @@ import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
 import sodium from "libsodium-wrappers"
 import { encode, decode } from "cbor-x"
+import createDebug from "debug"
 
 import {
   RAEncryptedHTTPRequest,
@@ -33,6 +34,8 @@ import {
   ServerRAMockWebSocket,
   ServerRAMockWebSocketServer,
 } from "./ServerRAWebSocket.js"
+
+const debug = createDebug("ra-https:TunnelServer")
 
 /**
  * Virtual server for remote-attested encrypted channels.
@@ -127,7 +130,7 @@ export class TunnelServer {
    */
   #setupControlChannel(): void {
     this.controlWss.on("connection", (controlWs: WebSocket) => {
-      console.log("New WebSocket connection, setting up control channel")
+      debug("New WebSocket connection, setting up control channel")
 
       // Intercept messages before they reach application handlers
       const originalEmit = controlWs.emit.bind(controlWs)
@@ -233,7 +236,7 @@ export class TunnelServer {
 
           if (isRAEncryptedHTTPRequest(message)) {
             ra.logWebSocketConnections()
-            console.log(
+            debug(
               `Encrypted HTTP request (${message.requestId}): ${message.url}`,
             )
             ra.#handleTunnelHttpRequest(controlWs, message).catch(
@@ -548,7 +551,7 @@ export class TunnelServer {
   public logWebSocketConnections(): void {
     try {
       const entries = Array.from(this.webSocketConnections.entries())
-      console.log(`WebSocket connections: ${entries.length}`)
+      debug(`WebSocket connections: ${entries.length}`)
       for (const [connectionId, { controlWs: tunnelWs }] of entries) {
         const hasKey = this.symmetricKeyBySocket.has(tunnelWs)
         let state
@@ -566,7 +569,7 @@ export class TunnelServer {
             state = "CLOSED"
             break
         }
-        console.log(
+        debug(
           `- ${connectionId}: state=${state}, symmetricKey=${
             hasKey ? "set" : "missing"
           }`,
