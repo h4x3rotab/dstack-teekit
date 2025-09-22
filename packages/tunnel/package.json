@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
-    "test": "ava"
+    "test": "ava --serial"
   },
   "dependencies": {
     "cbor-x": "^1.6.0",
