@@ -9,6 +9,7 @@ import {
   verifyTdx,
 } from "ra-https-qvl"
 import { base64 as scureBase64 } from "@scure/base"
+import { encode, decode } from "cbor-x"
 
 import {
   RAEncryptedHTTPRequest,
@@ -107,6 +108,7 @@ export class TunnelClient {
       // Use dedicated control channel path
       controlUrl.pathname = "/__ra__"
       this.ws = new WebSocket(controlUrl.toString())
+      this.ws.binaryType = "arraybuffer"
 
       this.ws.onopen = () => {
         // Wait for server_kx to complete handshake before resolving
@@ -185,7 +187,19 @@ export class TunnelClient {
       this.ws.onmessage = async (event) => {
         let message
         try {
-          message = JSON.parse(event.data)
+          let bytes: Uint8Array
+          if (typeof (event as any).data === "string") {
+            const str = (event as any).data as string
+            bytes = new TextEncoder().encode(str)
+          } else if ((event as any).data instanceof ArrayBuffer) {
+            bytes = new Uint8Array((event as any).data as ArrayBuffer)
+          } else if (typeof (event as any).data?.arrayBuffer === "function") {
+            const buf = await (event as any).data.arrayBuffer()
+            bytes = new Uint8Array(buf)
+          } else {
+            bytes = new Uint8Array((event as any).data)
+          }
+          message = decode(bytes)
         } catch (error) {
           console.error("Error parsing WebSocket message:", error)
         }
@@ -291,9 +305,9 @@ export class TunnelClient {
    */
   public send(message: RAEncryptedMessage | ControlChannelKXConfirm): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Allow plaintext only for client_kx during handshake
+      // Allow plaintext only for client_kx during handshake (CBOR-framed)
       if (isControlChannelKXConfirm(message)) {
-        const data = JSON.stringify(message)
+        const data = encode(message)
         this.ws.send(data)
         return
       }
@@ -303,7 +317,7 @@ export class TunnelClient {
       }
 
       const envelope = this.#encryptPayload(message)
-      this.ws.send(JSON.stringify(envelope))
+      this.ws.send(encode(envelope))
     } else {
       throw new Error("WebSocket not connected")
     }
@@ -314,7 +328,7 @@ export class TunnelClient {
       throw new Error("Missing symmetric key")
     }
     const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES)
-    const plaintext = sodium.from_string(JSON.stringify(payload))
+    const plaintext = encode(payload)
     const ciphertext = sodium.crypto_secretbox_easy(
       plaintext,
       nonce,
@@ -322,8 +336,8 @@ export class TunnelClient {
     )
     return {
       type: "enc",
-      nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
-      ciphertext: sodium.to_base64(ciphertext, sodium.base64_variants.ORIGINAL),
+      nonce: nonce,
+      ciphertext: ciphertext,
     }
   }
 
@@ -331,21 +345,14 @@ export class TunnelClient {
     if (!this.symmetricKey) {
       throw new Error("Missing symmetric key")
     }
-    const nonce = sodium.from_base64(
-      envelope.nonce,
-      sodium.base64_variants.ORIGINAL,
-    )
-    const ciphertext = sodium.from_base64(
-      envelope.ciphertext,
-      sodium.base64_variants.ORIGINAL,
-    )
+    const nonce = envelope.nonce
+    const ciphertext = envelope.ciphertext
     const plaintext = sodium.crypto_secretbox_open_easy(
       ciphertext,
       nonce,
       this.symmetricKey,
     )
-    const text = sodium.to_string(plaintext)
-    return JSON.parse(text)
+    return decode(plaintext)
   }
 
   #handleTunnelResponse(response: RAEncryptedHTTPResponse): void {
@@ -418,8 +425,8 @@ export class TunnelClient {
         typeof input === "string"
           ? input
           : input instanceof URL
-            ? input.toString()
-            : input.url
+          ? input.toString()
+          : input.url
       const method = init?.method || "GET"
       const headers: Record<string, string> = {}
 

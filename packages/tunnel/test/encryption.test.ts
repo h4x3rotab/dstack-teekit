@@ -3,6 +3,7 @@ import express, { Request, Response } from "express"
 import type { AddressInfo } from "node:net"
 import { WebSocket } from "ws"
 import sodium from "libsodium-wrappers"
+import { encode, decode } from "cbor-x"
 
 import { TunnelServer } from "ra-https-tunnel"
 import { loadQuote, startTunnelApp, stopTunnel } from "./tunnel.test.js"
@@ -23,8 +24,11 @@ test.serial(
       const wireMessages: any[] = []
       const handleWire = (data: any) => {
         try {
-          const txt = typeof data === "string" ? data : data.toString()
-          const msg = JSON.parse(txt)
+          const bytes =
+            typeof data === "string"
+              ? new TextEncoder().encode(data)
+              : new Uint8Array(data)
+          const msg = decode(bytes)
           wireMessages.push(msg)
         } catch {}
       }
@@ -85,7 +89,9 @@ test.serial(
     try {
       // Wait for server_kx
       const serverKx: any = await new Promise((resolve) => {
-        ws.once("message", (data) => resolve(JSON.parse(data.toString())))
+        ws.once("message", (data) =>
+          resolve(decode(new Uint8Array(data as any))),
+        )
       })
       t.is(serverKx.type, "server_kx")
 
@@ -121,7 +127,7 @@ test.serial(
           sodium.base64_variants.ORIGINAL,
         ),
       }
-      ws.send(JSON.stringify(clientKx))
+      ws.send(encode(clientKx))
 
       // Send plaintext after handshake; server should drop
       ws.send(JSON.stringify({ ...badPlaintextReq, requestId: "r2" }))
@@ -142,7 +148,7 @@ test.serial(
         headers: {},
       }
       const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES)
-      const plaintext = sodium.from_string(JSON.stringify(httpReq))
+      const plaintext = encode(httpReq)
       const ciphertext = sodium.crypto_secretbox_easy(
         plaintext,
         nonce,
@@ -150,33 +156,26 @@ test.serial(
       )
       const envelope = {
         type: "enc",
-        nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
-        ciphertext: sodium.to_base64(
-          ciphertext,
-          sodium.base64_variants.ORIGINAL,
-        ),
+        nonce: nonce,
+        ciphertext: ciphertext,
       }
-      ws.send(JSON.stringify(envelope))
+      ws.send(encode(envelope))
 
-      // Expect encrypted http_response
+      // Expect encrypted http_response, use any types since this is a test
       const encResp: any = await new Promise((resolve) =>
-        ws.once("message", (data) => resolve(JSON.parse(data.toString()))),
+        ws.once("message", (data) =>
+          resolve(decode(new Uint8Array(data as any))),
+        ),
       )
       t.is(encResp.type, "enc")
-      const respNonce = sodium.from_base64(
-        encResp.nonce,
-        sodium.base64_variants.ORIGINAL,
-      )
-      const respCipher = sodium.from_base64(
-        encResp.ciphertext,
-        sodium.base64_variants.ORIGINAL,
-      )
+      const respNonce = encResp.nonce as Uint8Array
+      const respCipher = encResp.ciphertext as Uint8Array
       const respPlain = sodium.crypto_secretbox_open_easy(
         respCipher,
         respNonce,
         symmetricKey,
       )
-      const resp = JSON.parse(sodium.to_string(respPlain))
+      const resp = decode(respPlain)
       t.is(resp.type, "http_response")
       t.is(resp.requestId, "r3")
       t.is(resp.status, 200)

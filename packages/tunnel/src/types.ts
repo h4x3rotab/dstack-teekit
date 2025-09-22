@@ -35,7 +35,7 @@ export type RAEncryptedClientCloseEvent = {
 export type RAEncryptedWSMessage = {
   type: "ws_message"
   connectionId: string
-  data: string
+  data: string | Uint8Array
   dataType: "string" | "arraybuffer"
 }
 
@@ -70,10 +70,10 @@ export type ControlChannelKXConfirm = {
 }
 
 // Encrypted envelope carrying any tunneled payload after handshake.
-// The contents (ciphertext) are a JSON-encoded payload of the original
+// The contents (ciphertext) are a CBOR-encoded payload of the original
 // tunnel message types, encrypted with XSalsa20-Poly1305 via crypto_secretbox.
 export type ControlChannelEncryptedMessage = {
   type: "enc"
-  nonce: string // base64
-  ciphertext: string // base64
+  nonce: Uint8Array
+  ciphertext: Uint8Array
 }

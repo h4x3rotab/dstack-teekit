@@ -4,6 +4,7 @@ import { Express } from "express"
 import httpMocks, { RequestMethod } from "node-mocks-http"
 import { EventEmitter } from "events"
 import sodium from "libsodium-wrappers"
+import { encode, decode } from "cbor-x"
 
 import {
   RAEncryptedHTTPRequest,
@@ -138,7 +139,7 @@ export class TunnelServer {
           x25519PublicKey: Buffer.from(this.x25519PublicKey).toString("base64"),
           quote: Buffer.from(this.quote).toString("base64"),
         }
-        controlWs.send(JSON.stringify(serverKxMessage))
+        controlWs.send(encode(serverKxMessage))
       } catch (e) {
         console.error("Failed to send server_kx message:", e)
       }
@@ -169,7 +170,7 @@ export class TunnelServer {
         if (event === "message") {
           const data = args[0] as Buffer
           try {
-            let message = JSON.parse(data.toString())
+            let message = decode(new Uint8Array(data))
             const ra = (this as any).ra as TunnelServer
 
             // Handle client key exchange
@@ -268,7 +269,7 @@ export class TunnelServer {
         if (event === "close") {
           return originalEmit(event, ...args)
         } else {
-          console.error(event, ...args)
+          console.error("Received message after close:", event, ...args)
           return true
         }
       }
@@ -374,7 +375,7 @@ export class TunnelServer {
       const mock = new ServerRAMockWebSocket(
         // onSend: application -> client
         (payload) => {
-          let messageData: string
+          let messageData: string | Uint8Array
           let dataType: "string" | "arraybuffer"
           if (typeof payload === "string") {
             messageData = payload
@@ -384,7 +385,7 @@ export class TunnelServer {
               messageData = payload.toString()
               dataType = "string"
             } else {
-              messageData = payload.toString("base64")
+              messageData = new Uint8Array(payload)
               dataType = "arraybuffer"
             }
           } else {
@@ -462,9 +463,9 @@ export class TunnelServer {
       try {
         let dataToSend: string | Buffer
         if (messageReq.dataType === "arraybuffer") {
-          dataToSend = Buffer.from(messageReq.data, "base64")
+          dataToSend = Buffer.from(messageReq.data as Uint8Array)
         } else {
-          dataToSend = messageReq.data
+          dataToSend = messageReq.data as string
         }
         connection.mockWs.emitMessage(dataToSend)
       } catch (error) {
@@ -504,12 +505,12 @@ export class TunnelServer {
       throw new Error("Missing symmetric key for socket (outbound)")
     }
     const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES)
-    const plaintext = sodium.from_string(JSON.stringify(payload))
+    const plaintext = encode(payload)
     const ciphertext = sodium.crypto_secretbox_easy(plaintext, nonce, key)
     return {
       type: "enc",
-      nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
-      ciphertext: sodium.to_base64(ciphertext, sodium.base64_variants.ORIGINAL),
+      nonce: nonce,
+      ciphertext: ciphertext,
     }
   }
 
@@ -522,17 +523,10 @@ export class TunnelServer {
       this.logWebSocketConnections()
       throw new Error("Missing symmetric key for socket (inbound)")
     }
-    const nonce = sodium.from_base64(
-      envelope.nonce,
-      sodium.base64_variants.ORIGINAL,
-    )
-    const ciphertext = sodium.from_base64(
-      envelope.ciphertext,
-      sodium.base64_variants.ORIGINAL,
-    )
+    const nonce = envelope.nonce
+    const ciphertext = envelope.ciphertext
     const plaintext = sodium.crypto_secretbox_open_easy(ciphertext, nonce, key)
-    const text = sodium.to_string(plaintext)
-    return JSON.parse(text)
+    return decode(plaintext)
   }
 
   /**
@@ -540,7 +534,7 @@ export class TunnelServer {
    */
   private sendEncrypted(controlWs: WebSocket, payload: unknown): void {
     const env = this.#encryptForSocket(controlWs, payload)
-    controlWs.send(JSON.stringify(env))
+    controlWs.send(encode(env))
   }
 
   /**

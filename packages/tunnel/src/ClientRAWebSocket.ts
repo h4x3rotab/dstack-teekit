@@ -9,8 +9,6 @@ import {
   generateConnectionId,
   getOriginPort,
   toArrayBuffer,
-  arrayBufferToBase64,
-  base64ToArrayBuffer,
 } from "./utils/client.js"
 
 export class ClientRAMockWebSocket extends EventTarget {
@@ -33,7 +31,7 @@ export class ClientRAMockWebSocket extends EventTarget {
   public onerror: ((this: WebSocket, ev: Event) => any) | null = null
 
   private ra: TunnelClient
-  private messageQueue: string[] = []
+  private messageQueue: (string | Uint8Array)[] = []
 
   constructor(ra: TunnelClient, url: string, protocols?: string | string[]) {
     super()
@@ -97,10 +95,10 @@ export class ClientRAMockWebSocket extends EventTarget {
       if (typeof data === "string") {
         this.messageQueue.push(data)
       } else {
-        // Convert binary data to base64 for queueing
+        // Queue binary data as Uint8Array
         const arrayBuffer = toArrayBuffer(data)
-        const base64 = arrayBufferToBase64(arrayBuffer)
-        this.messageQueue.push(`binary:${base64}`)
+        const bytes = new Uint8Array(arrayBuffer)
+        this.messageQueue.push(bytes)
       }
       return
     }
@@ -109,16 +107,16 @@ export class ClientRAMockWebSocket extends EventTarget {
       throw new Error("WebSocket is not open")
     }
 
-    let messageData: string
+    let messageData: string | Uint8Array
     let dataType: "string" | "arraybuffer"
 
     if (typeof data === "string") {
       messageData = data
       dataType = "string"
     } else {
-      // Convert binary data to base64 for transport
+      // Send binary as raw bytes
       const arrayBuffer = toArrayBuffer(data)
-      messageData = arrayBufferToBase64(arrayBuffer)
+      messageData = new Uint8Array(arrayBuffer)
       dataType = "arraybuffer"
     }
 
@@ -177,14 +175,7 @@ export class ClientRAMockWebSocket extends EventTarget {
         // Send any queued messages
         while (this.messageQueue.length > 0) {
           const queuedData = this.messageQueue.shift()!
-          if (queuedData.startsWith("binary:")) {
-            // Decode base64 back to ArrayBuffer
-            const base64 = queuedData.substring(7)
-            const arrayBuffer = base64ToArrayBuffer(base64)
-            this.send(arrayBuffer)
-          } else {
-            this.send(queuedData)
-          }
+          this.send(queuedData)
         }
 
         const openEvent = new Event("open")
@@ -215,9 +206,9 @@ export class ClientRAMockWebSocket extends EventTarget {
   }
 
   public handleTunnelMessage(message: RAEncryptedWSMessage): void {
-    let messageData: any
+    let messageData
     if (message.dataType === "arraybuffer") {
-      messageData = base64ToArrayBuffer(message.data)
+      messageData = toArrayBuffer(message.data as Uint8Array)
     } else {
       messageData = message.data
     }

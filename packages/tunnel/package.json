@@ -10,6 +10,7 @@
     "test": "ava"
   },
   "dependencies": {
+    "cbor-x": "^1.6.0",
     "libsodium-wrappers": "^0.7.15",
     "node-mocks-http": "^1.17.2",
     "ws": "^8.18.3"
