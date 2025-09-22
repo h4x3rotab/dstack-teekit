@@ -302,20 +302,21 @@ export class TunnelServer {
         url: tunnelReq.url,
         path: urlObj.pathname,
         headers: tunnelReq.headers,
-        body: tunnelReq.body
-          ? parseBody(tunnelReq.body, tunnelReq.headers["content-type"])
-          : undefined,
         query: query,
       })
+
+      // Override createRequest's default behavior for empty strings,
+      // so `req.body` is set exactly to the parsed body.
+      req.body =
+        tunnelReq.body !== undefined
+          ? parseBody(tunnelReq.body, tunnelReq.headers["content-type"])
+          : undefined
 
       const res = httpMocks.createResponse({
         eventEmitter: EventEmitter,
       })
 
       // Pass responses back through the tunnel
-      // TODO: if ws.send() fails due to connectivity, the client could
-      // get out of sync.
-
       res.on("end", () => {
         const response: RAEncryptedHTTPResponse = {
           type: "http_response",
