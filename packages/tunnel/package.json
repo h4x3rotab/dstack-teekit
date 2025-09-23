@@ -5,8 +5,8 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "dev": "tsc --watch",
-    "build": "tsc",
+    "dev": "concurrently -n ts,sw -c green,cyan  \"tsc --watch\" \"esbuild src/sw.ts --bundle --watch --outfile=lib/sw.build.js\"",
+    "build": "tsc && esbuild src/sw.ts --bundle --outfile=lib/sw.build.js",
     "test": "ava --serial"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "@types/node": "^24.3.1",
     "@types/ws": "^8.18.1",
     "ava": "^6.4.1",
+    "concurrently": "^9.2.1",
     "express": "^5.1.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"

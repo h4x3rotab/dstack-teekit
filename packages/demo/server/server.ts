@@ -1,7 +1,11 @@
 import express from "express"
 import cors from "cors"
 import { WebSocket } from "ws"
-import { TunnelServer, ServerRAMockWebSocket } from "ra-https-tunnel"
+import {
+  TunnelServer,
+  ServerRAMockWebSocket,
+  encryptedOnly,
+} from "ra-https-tunnel"
 import { base64 } from "@scure/base"
 
 import {
@@ -23,9 +27,10 @@ let messages: Message[] = []
 let totalMessageCount = 0
 const MAX_MESSAGES = 30
 const startTime = Date.now()
+let counter = 0
 
 // API Routes
-app.get("/uptime", (_req, res) => {
+app.get("/uptime", encryptedOnly(), (_req, res) => {
   const uptimeMs = Date.now() - startTime
   const uptimeSeconds = Math.floor(uptimeMs / 1000)
   const uptimeMinutes = Math.floor(uptimeSeconds / 60)
@@ -42,6 +47,11 @@ app.get("/uptime", (_req, res) => {
       }s`,
     },
   })
+})
+
+app.post("/increment", encryptedOnly(), (_req, res) => {
+  counter += 1
+  res.json({ counter })
 })
 
 wss.on("connection", (ws: WebSocket) => {
