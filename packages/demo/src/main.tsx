@@ -16,7 +16,7 @@ const target =
 
 // Register Service Worker for all same-origin fetch requests
 if ("serviceWorker" in navigator) {
-  const swUrl = `/sw.js?target=${encodeURIComponent(target)}`
+  const swUrl = `/__ra-serviceworker__.js?target=${encodeURIComponent(target)}`
   navigator.serviceWorker
     .register(swUrl, { type: "module", scope: "/" })
     .catch((err) => {

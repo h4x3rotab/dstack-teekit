@@ -9,6 +9,10 @@
     "build": "tsc && esbuild src/sw.ts --bundle --outfile=lib/sw.build.js",
     "test": "ava --serial"
   },
+  "exports": {
+    ".": "./lib/index.js",
+    "./sw": "./lib/swMiddleware.js"
+  },
   "dependencies": {
     "cbor-x": "^1.6.0",
     "libsodium-wrappers": "^0.7.15",
