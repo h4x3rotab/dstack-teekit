@@ -30,6 +30,7 @@ import {
   sanitizeHeaders,
   getStatusText,
 } from "./utils/server.js"
+import { markRequestAsEncrypted } from "./encryptedOnly.js"
 import {
   ServerRAMockWebSocket,
   ServerRAMockWebSocketServer,
@@ -361,6 +362,9 @@ export class TunnelServer {
           console.error("Failed to send encrypted error http_response:", e)
         }
       })
+
+      // Mark this synthetic request as arriving via the encrypted tunnel
+      markRequestAsEncrypted(req)
 
       // Execute the request against the Express app
       this.app(req, res)

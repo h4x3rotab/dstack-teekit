@@ -5,7 +5,7 @@ import { WebSocket } from "ws"
 import sodium from "libsodium-wrappers"
 import { encode, decode } from "cbor-x"
 
-import { TunnelServer } from "ra-https-tunnel"
+import { TunnelClient, TunnelServer, encryptedOnly } from "ra-https-tunnel"
 import { loadQuote, startTunnelApp, stopTunnel } from "./helpers/helpers.js"
 
 test.serial(
@@ -211,3 +211,45 @@ test.serial("Client send fails when symmetric key is missing", async (t) => {
     await stopTunnel(tunnelServer, tunnelClient)
   }
 })
+
+test.serial(
+  "Server encryptedOnly() routes blocks direct HTTP, allows tunneled HTTP",
+  async (t) => {
+    const app = express()
+    app.get("/secret", encryptedOnly(), (_req, res) => {
+      res.status(200).send("shh")
+    })
+
+    const quote = loadQuote({ tdxv4: true })
+    const tunnelServer = await TunnelServer.initialize(app, quote)
+    await new Promise<void>((resolve) => {
+      tunnelServer.server.listen(0, "127.0.0.1", () => resolve())
+    })
+    const address = tunnelServer.server.address() as AddressInfo
+    const origin = `http://127.0.0.1:${address.port}`
+
+    // Direct HTTP should be forbidden
+    const direct = await fetch(origin + "/secret")
+    t.is(direct.status, 403)
+
+    // Tunnel request should succeed
+    const tunnelClient = await TunnelClient.initialize(origin, {
+      match: () => true,
+    })
+
+    const res = await tunnelClient.fetch("/secret")
+    t.is(res.status, 200)
+    t.is(await res.text(), "shh")
+
+    if (tunnelClient.ws) {
+      tunnelClient.ws.close()
+    }
+
+    await new Promise<void>((resolve) => {
+      tunnelServer.wss.close(() => resolve())
+    })
+    await new Promise<void>((resolve) => {
+      tunnelServer.server.close(() => resolve())
+    })
+  },
+)
