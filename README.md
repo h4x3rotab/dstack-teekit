@@ -177,4 +177,4 @@ class TunnelClient {
 
 ## License
 
-MIT (c) 2025 Canvas Technologies, Inc.
+MIT (C) 2025
