@@ -80,6 +80,25 @@ async function main() {
 main()
 ```
 
+## Demo
+
+The packages/demo directory contains a demo of a chat app that relays
+WebSocket messages and fetch requests over an encrypted channel.
+
+Node v22 is expected.
+
+Run the client using `tsx`:
+
+```
+npm run dev
+```
+
+Run the server using Node.js:
+
+```
+npm run server
+```
+
 ## Architecture
 
 The tunnel performs a key exchange and attestation check before
@@ -99,44 +118,18 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
    `{ type: "enc", nonce, ciphertext }` carrying tunneled HTTP
    and WebSocket messages.
 
-Security considerations:
-
-- If you omit `mrtd`, `report_data`, and `match`, the client still
-  verifies the quote is valid, but it won’t pin to an expected
-  identity.
-- One keypair is generated per server process; there’s no session
-  resumption across processes. Use sticky sessions if load balancing.
-
-## Limitations
+## Considerations & Limitations
 
 - All WebSocket upgrades to the HTTP server (other than `/__ra__`) are rejected. Application WebSockets must use `tunnelServer.wss`.
 - Client WebSocket targets must use the same port as the tunnel `origin`.
+- One keypair is generated per server process; there’s no session resumption across processes. No support for load balancing (yet).
 - HTTP request bodies supported: string, `Uint8Array`, `ArrayBuffer`, and `ReadableStream`.
-- HTTP request/response bodies are buffered end-to-end; very large payloads will increase memory usage.
-- Default client request timeout is 30s and not configurable.
-- Client `WebSocket.send` does not accept `Blob`.
-- Client `fetch` does not natively serialize `FormData`; send a prepared multipart string if needed.
+- HTTP request/response bodies are buffered end-to-end; very large payloads cannot be streamed.
+- The default client request timeout is 30s and not configurable.
+- The client `WebSocket.send` does not accept `Blob`.
+- The client `fetch` does not natively serialize `FormData`; send a prepared multipart string if needed.
 - A single `TunnelClient` reuses one encrypted control channel; each `fetch` is multiplexed over it.
 - WebSocket messages queued before `open` are automatically flushed once the socket opens.
-
-## Demo
-
-The packages/demo directory contains a demo of a chat app that relays
-WebSocket messages and fetch requests over an encrypted channel.
-
-Node v22 is expected.
-
-Run the client using `tsx`:
-
-```
-npm run dev
-```
-
-Run the server using Node.js:
-
-```
-npm run server
-```
 
 ## API
 
@@ -181,3 +174,7 @@ class TunnelClient {
   - Only `server_kx` and `client_kx` are plaintext; everything else must be `{ type: "enc", ... }`.
 - `Blob` not supported when sending through WebSocket:
   - Convert to `ArrayBuffer`/`Uint8Array` first.
+
+## License
+
+MIT (c) 2025 Canvas Technologies, Inc.
