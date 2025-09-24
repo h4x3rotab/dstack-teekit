@@ -38,6 +38,11 @@ import {
 
 const debug = createDebug("ra-https:TunnelServer")
 
+type TunnelServerConfig = {
+  heartbeatInterval?: number
+  heartbeatTimeout?: number
+}
+
 /**
  * Virtual server for remote-attested encrypted channels.
  *
@@ -79,23 +84,35 @@ export class TunnelServer {
   public readonly x25519PublicKey: Uint8Array
   private readonly x25519PrivateKey: Uint8Array
 
-  private webSocketConnections = new Map<
+  private sockets = new Map<
     string,
     { mockWs: ServerRAMockWebSocket; controlWs: WebSocket }
   >()
   private symmetricKeyBySocket = new Map<WebSocket, Uint8Array>()
+  private livenessBySocket = new Map<
+    WebSocket,
+    { isAlive: boolean; lastActivityMs: number }
+  >()
+  private heartbeatTimer?: ReturnType<typeof setInterval>
+
+  private heartbeatInterval: number
+  private heartbeatTimeout: number
 
   private constructor(
     private app: Express,
     quote: Uint8Array,
     publicKey: Uint8Array,
     privateKey: Uint8Array,
+    config?: TunnelServerConfig,
   ) {
     this.app = app
     this.quote = quote
     this.x25519PublicKey = publicKey
     this.x25519PrivateKey = privateKey
     this.server = http.createServer(app)
+
+    this.heartbeatInterval = config?.heartbeatInterval || 30000
+    this.heartbeatTimeout = config?.heartbeatTimeout || 60000
 
     // Expose a mock WebSocketServer to application code
     this.wss = new ServerRAMockWebSocketServer()
@@ -115,15 +132,32 @@ export class TunnelServer {
         socket.destroy()
       }
     })
+
+    // Heartbeat to detect dead control sockets and cleanup
+    this.heartbeatTimer = setInterval(
+      () => this.#heartbeatSweep(),
+      this.heartbeatInterval,
+    )
+    if (typeof this.heartbeatTimer.unref === "function") {
+      this.heartbeatTimer.unref()
+    }
+
+    this.server.on("close", () => {
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer)
+        this.heartbeatTimer = undefined
+      }
+    })
   }
 
   static async initialize(
     app: Express,
     quote: Uint8Array,
+    config?: TunnelServerConfig,
   ): Promise<TunnelServer> {
     await sodium.ready
     const { publicKey, privateKey } = sodium.crypto_box_keypair()
-    return new TunnelServer(app, quote, publicKey, privateKey)
+    return new TunnelServer(app, quote, publicKey, privateKey, config)
   }
 
   /**
@@ -135,6 +169,21 @@ export class TunnelServer {
 
       // Intercept messages before they reach application handlers
       const originalEmit = controlWs.emit.bind(controlWs)
+
+      // Initialize liveness tracking
+      this.livenessBySocket.set(controlWs, {
+        isAlive: true,
+        lastActivityMs: Date.now(),
+      })
+      try {
+        controlWs.on("pong", () => {
+          const l = this.livenessBySocket.get(controlWs)
+          if (l) {
+            l.isAlive = true
+            l.lastActivityMs = Date.now()
+          }
+        })
+      } catch {}
 
       // Immediately announce server key-exchange public key to the client
       try {
@@ -151,9 +200,10 @@ export class TunnelServer {
       // Cleanup on close
       controlWs.on("close", () => {
         this.symmetricKeyBySocket.delete(controlWs)
+        this.livenessBySocket.delete(controlWs)
 
         const toRemove: string[] = []
-        for (const [connId, conn] of this.webSocketConnections.entries()) {
+        for (const [connId, conn] of this.sockets.entries()) {
           if (conn.controlWs === controlWs) {
             try {
               conn.mockWs.emitClose(1006, "tunnel closed")
@@ -166,12 +216,16 @@ export class TunnelServer {
           }
         }
         for (const id of toRemove) {
-          this.webSocketConnections.delete(id)
+          this.sockets.delete(id)
         }
       })
 
       controlWs.emit = function (event: string, ...args: any[]): boolean {
         if (event === "message") {
+          const ra = (this as any).ra as TunnelServer
+
+          const live = ra.livenessBySocket.get(controlWs)
+          if (live) live.lastActivityMs = Date.now()
           // Decode incoming message from client
           let message
           try {
@@ -181,8 +235,6 @@ export class TunnelServer {
             console.error("Received invalid CBOR message")
             return true
           }
-
-          const ra = (this as any).ra as TunnelServer
 
           // Handle client key exchange
           if (isControlChannelKXConfirm(message)) {
@@ -273,13 +325,8 @@ export class TunnelServer {
           }
         }
 
-        // Discard non-tunnel messages other than close
-        if (event === "close") {
-          return originalEmit(event, ...args)
-        } else {
-          console.error("Received message after close:", event, ...args)
-          return true
-        }
+        // Forward all non-message events to the original emitter
+        return originalEmit(event, ...args)
       }
       ;(controlWs as any).ra = this
     })
@@ -443,7 +490,7 @@ export class TunnelServer {
       )
 
       // Track mapping
-      this.webSocketConnections.set(connectReq.connectionId, {
+      this.sockets.set(connectReq.connectionId, {
         mockWs: mock,
         controlWs: controlWs,
       })
@@ -479,7 +526,7 @@ export class TunnelServer {
   }
 
   #handleTunnelWebSocketMessage(messageReq: RAEncryptedWSMessage): void {
-    const connection = this.webSocketConnections.get(messageReq.connectionId)
+    const connection = this.sockets.get(messageReq.connectionId)
     if (connection) {
       try {
         let dataToSend: string | Buffer
@@ -499,7 +546,7 @@ export class TunnelServer {
   }
 
   #handleTunnelWebSocketClose(closeReq: RAEncryptedClientCloseEvent): void {
-    const connection = this.webSocketConnections.get(closeReq.connectionId)
+    const connection = this.sockets.get(closeReq.connectionId)
     if (connection) {
       try {
         connection.mockWs.emitClose(closeReq.code, closeReq.reason)
@@ -512,7 +559,7 @@ export class TunnelServer {
       try {
         this.wss.deleteClient(connection.mockWs)
       } catch {}
-      this.webSocketConnections.delete(closeReq.connectionId)
+      this.sockets.delete(closeReq.connectionId)
     }
   }
 
@@ -556,6 +603,8 @@ export class TunnelServer {
   private sendEncrypted(controlWs: WebSocket, payload: unknown): void {
     const env = this.#encryptForSocket(controlWs, payload)
     controlWs.send(encode(env))
+    const l = this.livenessBySocket.get(controlWs)
+    if (l) l.lastActivityMs = Date.now()
   }
 
   /**
@@ -564,7 +613,7 @@ export class TunnelServer {
    */
   public logWebSocketConnections(): void {
     try {
-      const entries = Array.from(this.webSocketConnections.entries())
+      const entries = Array.from(this.sockets.entries())
       debug(`WebSocket connections: ${entries.length}`)
       for (const [connectionId, { controlWs: tunnelWs }] of entries) {
         const hasKey = this.symmetricKeyBySocket.has(tunnelWs)
@@ -590,10 +639,14 @@ export class TunnelServer {
         )
       }
 
-      // Also warn if there are symmetric keys not tied to tracked connections
+      // Also warn if there are symmetric keys not tied to tracked WS connections,
+      // but only if their socket is not currently OPEN. HTTP-only control sockets
+      // are expected to have a symmetric key without a tracked WS connection.
       const trackedSockets = new Set(entries.map(([, v]) => v.controlWs))
       const strayKeys = Array.from(this.symmetricKeyBySocket.keys()).filter(
-        (controlWs) => !trackedSockets.has(controlWs),
+        (controlWs) =>
+          !trackedSockets.has(controlWs) &&
+          controlWs.readyState !== WebSocket.OPEN,
       )
       if (strayKeys.length > 0) {
         console.warn(
@@ -602,6 +655,54 @@ export class TunnelServer {
       }
     } catch (e) {
       console.error("Failed to log WebSocket connections:", e)
+    }
+  }
+
+  // Periodic heartbeat to prune dead sockets and cleanup keys
+  #heartbeatSweep(): void {
+    try {
+      const now = Date.now()
+
+      for (const ws of this.controlWss.clients) {
+        const l = this.livenessBySocket.get(ws)
+        if (!l) {
+          this.livenessBySocket.set(ws, { isAlive: true, lastActivityMs: now })
+          try {
+            ws.ping()
+          } catch {}
+          continue
+        }
+
+        // If a previous ping went unanswered, terminate to trigger cleanup
+        if (
+          l.isAlive === false ||
+          now - l.lastActivityMs > this.heartbeatTimeout
+        ) {
+          try {
+            ws.terminate()
+          } catch {}
+          continue
+        }
+
+        // Ask for a pong next interval
+        l.isAlive = false
+        try {
+          ws.ping()
+        } catch {}
+      }
+
+      // Proactively remove keys for sockets that are CLOSED or no longer tracked by ws server
+      for (const controlWs of Array.from(this.symmetricKeyBySocket.keys())) {
+        if (
+          controlWs.readyState === WebSocket.CLOSED ||
+          !this.controlWss.clients.has(controlWs)
+        ) {
+          this.symmetricKeyBySocket.delete(controlWs)
+          this.livenessBySocket.delete(controlWs)
+        }
+      }
+    } catch (e) {
+      console.error("Heartbeat sweep failed:", e)
     }
   }
 }
