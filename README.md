@@ -2,52 +2,25 @@
 
 This repository implements RA-HTTPS and RA-WSS, a set of protocols for
 securely connecting to remotely attested Secure Enclaves and Trusted
-Execution Environments.
+Execution Environments without custom X.509 verification flows.
 
-The protocols enforce TDX & SGX quote validation before opening an
-encrypted tunnel, ensuring that all traffic over the tunnel terminates
-inside the trusted execution environment.
-
-Specifically, we support:
+## Features
 
 - Encrypted HTTP requests via a `fetch`-compatible client API
 - Encrypted WebSockets via a browser-like `WebSocket` client API
-- TDX & SGX quote validation before opening an encrypted tunnel
+- TDX v4/v5 & SGX quote validation before opening an encrypted channel
+- ServiceWorker for upgrading all HTTP requests from a browser page
+  to use the encrypted channel
 
 ## Usage
 
-On the client, implementing this system requires creating a
-`TunnelClient()` object, and switching out Node.js `fetch` and
-`WebSocket` instances for a compatible interface.
+On the client, create a `TunnelClient()` object, and switch out
+Node.js `fetch` and `WebSocket` instances for our `fetch` and
+`WebSocket` wrappers.
 
-On the server, implementing the system involves adding a
-`TunnelServer` middleware to a Node.js (Express) server. We only
-support Express now, but future versions will support arbitrary
-backends through Nginx.
-
-```ts
-import express from "express"
-import { TunnelServer } from "ra-https-tunnel"
-
-async function main() {
-  const app = express()
-  app.get("/hello", (_req, res) => res.status(200).send("world"))
-
-  const quote: Uint8Array = /* load from your TEE */
-  const tunnelServer = await TunnelServer.initialize(app, quote)
-
-  // Optional: WebSocket support via the built-in mock server
-  tunnelServer.wss.on("connection", (ws) => {
-    ws.on("message", (data: any) => ws.send(data))
-  })
-
-  tunnelServer.server.listen(3000, () => {
-    console.log("ra-https service listening on :3000")
-  })
-}
-
-main()
-```
+Your client will validate that the server has the expected MRTD and
+REPORT_DATA before opening a connection, ensuring that all traffic
+terminates inside the trusted execution environment.
 
 ```ts
 import { TunnelClient } from "ra-https-tunnel"
@@ -58,13 +31,13 @@ async function main() {
 
   // You can validate against expected mrtd/report_data or provide a custom matcher.
   // Below shows fixed values; compute these from an expected quote if you have one.
-  const expectedMrtd = /* hex string */
-  const expectedReportData = /* hex string */
+  const expectedMrtd = '...' /* hex string */
+  const expectedReportData = '...' /* hex string */
 
   const client = await TunnelClient.initialize(origin, {
     mrtd: expectedMrtd,
     report_data: expectedReportData,
-    // sgx: true // set if the server quote is SGX; defaults to TDX otherwise
+    // sgx: true // defaults to TDX otherwise
   })
 
   // HTTP over tunnel
@@ -75,6 +48,34 @@ async function main() {
   const ws = new client.WebSocket(origin.replace(/^http/, "ws"))
   ws.addEventListener("open", () => ws.send("ping"))
   ws.addEventListener("message", (evt: any) => console.log(String(evt.data)))
+}
+
+main()
+```
+
+On the server, add a `TunnelServer` middleware to your Node.js/Express
+server. We only support Node.js now, but future versions will support
+arbitrary backends through Nginx.
+
+```ts
+import express from "express"
+import { TunnelServer } from "ra-https-tunnel"
+
+async function main() {
+  const app = express()
+  app.get("/hello", (_req, res) => res.status(200).send("world"))
+
+  const quote: Uint8Array = Uint8Array.fromHex('...') /* load from your TEE */
+  const tunnelServer = await TunnelServer.initialize(app, quote)
+
+  // Optional: WebSocket support via the built-in mock server
+  tunnelServer.wss.on("connection", (ws) => {
+    ws.on("message", (data: any) => ws.send(data))
+  })
+
+  tunnelServer.server.listen(3000, () => {
+    console.log("ra-https service listening on :3000")
+  })
 }
 
 main()
