@@ -1,6 +1,6 @@
 {
 	"extends": "../../tsconfig.base.json",
-	"include": ["src", "server", "shared"],
+	"include": ["src", "./server.ts", "./types.ts", "shared"],
 	"compilerOptions": {
 		"noEmit": true
 	},

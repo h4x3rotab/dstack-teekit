@@ -1,14 +1,6 @@
-import fs from "node:fs"
-import { exec } from "node:child_process"
 import express from "express"
 import cors from "cors"
 import { WebSocket } from "ws"
-import {
-  TunnelServer,
-  ServerRAMockWebSocket,
-  encryptedOnly,
-} from "ra-https-tunnel"
-import { base64 } from "@scure/base"
 
 import {
   Message,
@@ -17,11 +9,23 @@ import {
   BroadcastMessage,
 } from "./types.js"
 
+/* ********************************************************************************
+ * Begin RA-HTTPS tunnel code.
+ * ******************************************************************************** */
+import {
+  TunnelServer,
+  ServerRAMockWebSocket,
+  encryptedOnly,
+} from "ra-https-tunnel"
+import fs from "node:fs"
+import { exec } from "node:child_process"
+import { base64 } from "@scure/base"
+
 const quote = await new Promise<Uint8Array>(async (resolve, reject) => {
   // If config.json isn't set up, return a sample quote
   console.log("[ra-https-demo] TDX config.json not found, serving sample quote")
   if (!fs.existsSync("config.json")) {
-    const { tappdV4Base64 } = await import("../shared/samples.js")
+    const { tappdV4Base64 } = await import("./shared/samples.js")
     resolve(base64.decode(tappdV4Base64))
     return
   }
@@ -44,6 +48,10 @@ const quote = await new Promise<Uint8Array>(async (resolve, reject) => {
 const app = express()
 const { server, wss } = await TunnelServer.initialize(app, quote)
 
+/* ********************************************************************************
+ * End RA-HTTPS tunnel code.
+ * ******************************************************************************** */
+
 app.use(cors())
 app.use(express.json())
 
@@ -64,12 +72,16 @@ app.get("/uptime", encryptedOnly(), (_req, res) => {
 
   res.json({
     uptime: {
-      formatted: `${uptimeHours ? uptimeHours + "h" : ""} ${uptimeMinutes ? uptimeMinutes + "m" : ""} ${
-        seconds
-      }s`,
+      formatted: `${uptimeHours ? uptimeHours + "h" : ""} ${
+        uptimeMinutes ? uptimeMinutes + "m" : ""
+      } ${seconds}s`,
     },
   })
 })
+
+/* ********************************************************************************
+ * The encryptedOnly() middleware blocks direct requests from the Express server.
+ * ******************************************************************************** */
 
 app.post("/increment", encryptedOnly(), (_req, res) => {
   counter += 1
@@ -130,6 +142,8 @@ wss.on("connection", (ws: WebSocket) => {
     console.log("[ra-https-demo] Client disconnected")
   })
 })
+
+app.use(express.static("dist"))
 
 const PORT = process.env.PORT || 3001
 
