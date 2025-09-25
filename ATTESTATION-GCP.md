@@ -73,6 +73,12 @@ If you want to remove the VM when you're done (this takes about 30-60 seconds):
 gcloud compute instances delete gcp-tdx-vm
 ```
 
+If you want to see running VMs:
+
+```
+gcloud compute instances list
+```
+
 ## Connecting to the VM
 
 To connect to the VM:

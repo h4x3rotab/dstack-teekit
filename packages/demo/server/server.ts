@@ -1,3 +1,5 @@
+import fs from "node:fs"
+import { exec } from "node:child_process"
 import express from "express"
 import cors from "cors"
 import { WebSocket } from "ws"
@@ -14,10 +16,32 @@ import {
   BacklogMessage,
   BroadcastMessage,
 } from "./types.js"
-import { tappdV4Base64 } from "../shared/samples.js"
+
+const quote = await new Promise<Uint8Array>(async (resolve, reject) => {
+  // If config.json isn't set up, return a sample quote
+  console.log("[ra-https-demo] TDX config.json not found, serving sample quote")
+  if (!fs.existsSync("config.json")) {
+    const { tappdV4Base64 } = await import("../shared/samples.js")
+    resolve(base64.decode(tappdV4Base64))
+    return
+  }
+
+  // Otherwise, get a quote from SEAM (requires root)
+  exec("trustauthority-cli evidence -c config.json", (err, stdout) => {
+    if (err) {
+      reject(err)
+    }
+
+    try {
+      const response = JSON.parse(stdout)
+      resolve(base64.decode(response.tdx.quote))
+    } catch (err) {
+      reject(err)
+    }
+  })
+})
 
 const app = express()
-const quote = base64.decode(tappdV4Base64)
 const { server, wss } = await TunnelServer.initialize(app, quote)
 
 app.use(cors())
@@ -55,7 +79,7 @@ app.post("/increment", encryptedOnly(), (_req, res) => {
 })
 
 wss.on("connection", (ws: WebSocket) => {
-  console.log("Client connected")
+  console.log("[ra-https-demo] Client connected")
 
   // Send message backlog to new client
   const hiddenCount = Math.max(0, totalMessageCount - messages.length)
@@ -100,17 +124,19 @@ wss.on("connection", (ws: WebSocket) => {
         })
       }
     } catch (error) {
-      console.error("Error parsing message:", error)
+      console.error("[ra-https-demo] Error parsing message:", error)
     }
   })
 
   ws.on("close", () => {
-    console.log("Client disconnected")
+    console.log("[ra-https-demo] Client disconnected")
   })
 })
 
 const PORT = process.env.PORT || 3001
 
 server.listen(PORT, () => {
-  console.log(`WebSocket server running on http://localhost:${PORT}`)
+  console.log(
+    `[ra-https-demo] WebSocket server running on http://localhost:${PORT}`,
+  )
 })
