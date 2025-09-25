@@ -95,7 +95,6 @@ export class TunnelClient {
    * Helper for establishing connections. Waits for a connection on `this.ws`,
    * creating a new WebSocket to replace this.ws if necessary.
    */
-
   public async ensureConnection(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return Promise.resolve()

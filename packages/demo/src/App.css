@@ -8,8 +8,9 @@
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: 80vh;
+  height: 90vh;
   max-width: 800px;
+  min-width: 400px;
   margin: 0 auto;
   border: 1px solid #ccc;
   border-radius: 8px;

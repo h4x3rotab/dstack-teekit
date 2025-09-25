@@ -31,6 +31,16 @@ const enc = await TunnelClient.initialize(baseUrl, {
   },
 })
 
+const buttonStyle = {
+  padding: "8px 16px",
+  fontSize: "0.85em",
+  width: "100%",
+  border: "1px solid #ddd",
+  borderRadius: 4,
+  cursor: "pointer",
+  outline: "none",
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState<string>("")
@@ -39,8 +49,8 @@ function App() {
   const [uptime, setUptime] = useState<string>("")
   const [hiddenMessagesCount, setHiddenMessagesCount] = useState<number>(0)
   const [verifyResult, setVerifyResult] = useState<string>("")
-  const [swUptime, setSwUptime] = useState<string>("")
   const [swCounter, setSwCounter] = useState<number>(0)
+  const initializedRef = useRef<boolean>(false)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -74,6 +84,20 @@ function App() {
   useEffect(() => {
     fetchUptime()
     const interval = setInterval(fetchUptime, 10000) // Update every 10 seconds
+
+    if (!initializedRef.current) {
+      initializedRef.current = true
+      enc
+        .fetch(baseUrl + "/increment", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        })
+        .then(async (response) => {
+          const data = await response.json()
+          setSwCounter(data?.counter || 0)
+        })
+    }
 
     return () => clearInterval(interval)
   }, [fetchUptime])
@@ -198,98 +222,146 @@ function App() {
         <h1>Chat Room</h1>
         <div className="user-info">
           <span className="username">You are: {username}</span>
-          <span
-            className={`status ${connected ? "connected" : "disconnected"}`}
-          >
-            {connected ? "🟢 Connected" : "🔴 Disconnected"}
-          </span>{" "}
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault()
-              disconnectRA()
-            }}
-            style={{
-              color: "#333",
-              textDecoration: "underline",
-              cursor: "pointer",
-              fontSize: "0.85em",
-            }}
-          >
-            Disconnect
-          </a>
+          <span>
+            <span
+              className={`status ${connected ? "connected" : "disconnected"}`}
+            >
+              {connected ? "🟢 WS Connected" : "🔴 WS Disconnected"}
+            </span>{" "}
+            <a
+              href="#"
+              onClick={async (e) => {
+                e.preventDefault()
+                if (connected) {
+                  disconnectRA()
+                } else {
+                  await enc.ensureConnection()
+                  setConnected(true)
+                }
+              }}
+              style={{
+                color: "#333",
+                textDecoration: "underline",
+                cursor: "pointer",
+                fontSize: "0.85em",
+              }}
+            >
+              {connected ? "Disconnect" : "Connect"}
+            </a>
+          </span>
         </div>
       </div>
 
-      <div style={{ margin: "12px 0", padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>ServiceWorker tunnel test (native fetch)</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div
+        style={{
+          padding: 12,
+          borderBottom: "1px solid #ddd",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 6,
+            marginBottom: 10,
+            padding: 10,
+            backgroundColor: "#f1f2f3",
+            borderRadius: 6,
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "0.8em", color: "#333" }}>Uptime</div>
+            <div style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}>
+              {uptime || "—"}
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "0.8em", color: "#333" }}>Counter</div>
+            <div style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}>
+              {swCounter}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              fetchUptime()
+            }}
+            style={buttonStyle}
+          >
+            GET /uptime via tunnel API
+          </button>
+
           <button
             onClick={async () => {
               try {
                 const r = await fetch("/uptime")
                 const j = await r.json()
-                setSwUptime(j?.uptime?.formatted || "")
+                setUptime(j?.uptime?.formatted || "")
               } catch {}
             }}
+            style={buttonStyle}
           >
-            GET /uptime
+            GET /uptime via ServiceWorker
           </button>
+
           <button
             onClick={async () => {
               try {
-                const r = await fetch("/increment", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+                const response = await enc.fetch(baseUrl + "/increment", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: "{}",
+                })
+                const data = await response.json()
+                setSwCounter(data?.counter || 0)
+              } catch (error) {
+                console.error("Failed to increment via tunnel:", error)
+              }
+            }}
+            style={buttonStyle}
+          >
+            POST /increment via tunnel API
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                const r = await fetch("/increment", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: "{}",
+                })
                 const j = await r.json()
                 setSwCounter(j?.counter || 0)
               } catch {}
             }}
+            style={buttonStyle}
           >
-            POST /increment
+            POST /increment via ServiceWorker
+          </button>
+
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              verifyTdxInBrowser()
+            }}
+            style={buttonStyle}
+          >
+            Verify TDX/SGX quotes in browser
           </button>
         </div>
-        <div style={{ marginTop: 8, fontSize: "0.9em", color: "#333" }}>
-          <div>Uptime (via SW): {swUptime || "—"}</div>
-          <div>Counter (via SW): {swCounter}</div>
-        </div>
+
+        {verifyResult && (
+          <div style={{ marginTop: 12, fontSize: "0.85em", color: "#333" }}>
+            {verifyResult}
+          </div>
+        )}
       </div>
 
       <div className="messages-container">
-        {uptime && (
-          <div className="uptime-display">
-            Server uptime: {uptime}{" "}
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault()
-                fetchUptime()
-              }}
-              style={{
-                color: "inherit",
-                textDecoration: "underline",
-                cursor: "pointer",
-              }}
-            >
-              Refresh
-            </a>
-            <div style={{ margin: "10px 0" }}>
-              <button
-                onClick={(e) => {
-                  e.preventDefault()
-                  verifyTdxInBrowser()
-                }}
-                style={{
-                  padding: "4px 8px",
-                  fontSize: "0.85em",
-                }}
-              >
-                Verify TDX v4 (Tappd)
-              </button>
-            </div>
-            {verifyResult && (
-              <div className="verification-display">{verifyResult}</div>
-            )}
-          </div>
-        )}
         {hiddenMessagesCount > 0 && (
           <div className="hidden-messages-display">
             {hiddenMessagesCount} earlier message
