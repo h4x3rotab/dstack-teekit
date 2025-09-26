@@ -19,7 +19,8 @@ Wants=network-online.target
 Type=simple
 User=$RUN_USER
 WorkingDirectory=$WORKDIR
-ExecStart=/usr/bin/env npm run server
+Environment=NODE_VERSION=22
+ExecStart=/root/.nvm/nvm-exec npm run server
 Restart=on-failure
 RestartSec=5
 
