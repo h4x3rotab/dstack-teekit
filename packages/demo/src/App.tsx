@@ -9,7 +9,7 @@ import {
 import "./App.css"
 
 import { TunnelClient } from "ra-https-tunnel"
-import { verifyTdxBase64, verifySgxBase64 } from "ra-https-qvl"
+import { verifyTdxBase64, verifySgxBase64, hex } from "ra-https-qvl"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
@@ -24,9 +24,18 @@ export const baseUrl =
     ? "http://localhost:3001"
     : `${document.location.protocol}//${document.location.hostname}`
 
+const tunnelInfo: {
+  mrtd?: string
+  report_data?: string
+} = {}
+
 const enc = await TunnelClient.initialize(baseUrl, {
   match: (quote) => {
-    console.log(quote)
+    if (!("mr_td" in quote.body)) {
+      return false
+    }
+    tunnelInfo.mrtd = hex(quote.body.mr_td)
+    tunnelInfo.report_data = hex(quote.body.report_data)
     return true
   },
 })
@@ -50,6 +59,8 @@ function App() {
   const [hiddenMessagesCount, setHiddenMessagesCount] = useState<number>(0)
   const [verifyResult, setVerifyResult] = useState<string>("")
   const [swCounter, setSwCounter] = useState<number>(0)
+  const [mrtd, setMrtd] = useState<string>("")
+  const [reportData, setReportData] = useState<string>("")
   const initializedRef = useRef<boolean>(false)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -119,6 +130,8 @@ function App() {
 
     ws.onopen = () => {
       setConnected(true)
+      if (tunnelInfo.mrtd) setMrtd(tunnelInfo.mrtd)
+      if (tunnelInfo.report_data) setReportData(tunnelInfo.report_data)
       console.log("Connected to chat server")
       setTimeout(() => {
         inputRef.current?.focus()
@@ -204,13 +217,13 @@ function App() {
       })
 
       if (ok && ok2 && ok3) {
-        setVerifyResult("✅ TDX v4, v5, SGX verification succeeded")
+        setVerifyResult("✅ Extra TDX v4, v5, SGX verification tests succeeded")
         return
       }
-      setVerifyResult("❌ Verification returned false")
+      setVerifyResult("❌ Extra verification tests failed")
     } catch (err) {
       setVerifyResult(
-        `Failed to import/parse QVL: ${(err as Error)?.message || err}`,
+        `❌ Failed to import/parse QVL: ${(err as Error)?.message || err}`,
       )
       throw err
     }
@@ -252,158 +265,202 @@ function App() {
         </div>
       </div>
 
-      <div
-        style={{
-          padding: 12,
-          borderBottom: "1px solid #ddd",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 6,
-            marginBottom: 10,
-            padding: 10,
-            backgroundColor: "#f1f2f3",
-            borderRadius: 6,
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "0.8em", color: "#333" }}>Uptime</div>
-            <div style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}>
-              {uptime || "—"}
-            </div>
+      <div className="chat-columns">
+        <div className="chat-body">
+          <div className="messages-container">
+            {hiddenMessagesCount > 0 && (
+              <div className="hidden-messages-display">
+                {hiddenMessagesCount} earlier message
+                {hiddenMessagesCount !== 1 ? "s" : ""}
+              </div>
+            )}
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`message ${message.username === username ? "own-message" : "other-message"}`}
+              >
+                <div className="message-header">
+                  <span className="message-username">{message.username}</span>
+                  <span className="message-time">
+                    {formatTime(message.timestamp)}
+                  </span>
+                </div>
+                <div className="message-text">{message.text}</div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
           </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "0.8em", color: "#333" }}>Counter</div>
-            <div style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}>
-              {swCounter}
-            </div>
-          </div>
+
+          <form onSubmit={sendMessage} className="message-form">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newMessage}
+              onChange={handleInputChange}
+              placeholder="Type your message..."
+              disabled={!connected}
+              className="message-input"
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={!connected || !newMessage.trim()}
+              className="send-button"
+            >
+              Send
+            </button>
+          </form>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              fetchUptime()
-            }}
-            style={buttonStyle}
-          >
-            GET /uptime via tunnel API
-          </button>
-
-          <button
-            onClick={async () => {
-              try {
-                const r = await fetch("/uptime")
-                const j = await r.json()
-                setUptime(j?.uptime?.formatted || "")
-              } catch {}
-            }}
-            style={buttonStyle}
-          >
-            GET /uptime via ServiceWorker
-          </button>
-
-          <button
-            onClick={async () => {
-              try {
-                const response = await enc.fetch(baseUrl + "/increment", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: "{}",
-                })
-                const data = await response.json()
-                setSwCounter(data?.counter || 0)
-              } catch (error) {
-                console.error("Failed to increment via tunnel:", error)
-              }
-            }}
-            style={buttonStyle}
-          >
-            POST /increment via tunnel API
-          </button>
-
-          <button
-            onClick={async () => {
-              try {
-                const r = await fetch("/increment", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: "{}",
-                })
-                const j = await r.json()
-                setSwCounter(j?.counter || 0)
-              } catch {}
-            }}
-            style={buttonStyle}
-          >
-            POST /increment via ServiceWorker
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              verifyTdxInBrowser()
-            }}
-            style={buttonStyle}
-          >
-            Verify TDX/SGX quotes in browser
-          </button>
-        </div>
-
-        {verifyResult && (
-          <div style={{ marginTop: 12, fontSize: "0.85em", color: "#333" }}>
-            {verifyResult}
-          </div>
-        )}
-      </div>
-
-      <div className="messages-container">
-        {hiddenMessagesCount > 0 && (
-          <div className="hidden-messages-display">
-            {hiddenMessagesCount} earlier message
-            {hiddenMessagesCount !== 1 ? "s" : ""}
-          </div>
-        )}
-        {messages.map((message) => (
+        <div className="chat-control">
           <div
-            key={message.id}
-            className={`message ${message.username === username ? "own-message" : "other-message"}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 6,
+              marginBottom: 10,
+              padding: 10,
+              backgroundColor: "#f1f2f3",
+              borderRadius: 6,
+            }}
           >
-            <div className="message-header">
-              <span className="message-username">{message.username}</span>
-              <span className="message-time">
-                {formatTime(message.timestamp)}
-              </span>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "0.8em", color: "#333" }}>
+                Server Uptime
+              </div>
+              <div
+                style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}
+              >
+                ~{uptime || "—"}
+              </div>
             </div>
-            <div className="message-text">{message.text}</div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "0.8em", color: "#333" }}>Counter</div>
+              <div
+                style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}
+              >
+                {swCounter}
+              </div>
+            </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
 
-      <form onSubmit={sendMessage} className="message-form">
-        <input
-          ref={inputRef}
-          type="text"
-          value={newMessage}
-          onChange={handleInputChange}
-          placeholder="Type your message..."
-          disabled={!connected}
-          className="message-input"
-          autoFocus
-        />
-        <button
-          type="submit"
-          disabled={!connected || !newMessage.trim()}
-          className="send-button"
-        >
-          Send
-        </button>
-      </form>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 4,
+              marginBottom: 10,
+              padding: 10,
+              backgroundColor: "#f1f2f3",
+              borderRadius: 6,
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                fetchUptime()
+              }}
+              style={buttonStyle}
+            >
+              GET /uptime via TunnelClient
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  const response = await enc.fetch(baseUrl + "/increment", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: "{}",
+                  })
+                  const data = await response.json()
+                  setSwCounter(data?.counter || 0)
+                } catch (error) {
+                  console.error("Failed to increment via tunnel:", error)
+                }
+              }}
+              style={buttonStyle}
+            >
+              POST /increment via TunnelClient
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  const r = await fetch("/uptime")
+                  const j = await r.json()
+                  setUptime(j?.uptime?.formatted || "")
+                } catch {}
+              }}
+              style={buttonStyle}
+            >
+              GET /uptime via ServiceWorker
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  const r = await fetch("/increment", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: "{}",
+                  })
+                  const j = await r.json()
+                  setSwCounter(j?.counter || 0)
+                } catch {}
+              }}
+              style={buttonStyle}
+            >
+              POST /increment via ServiceWorker
+            </button>
+
+            <button
+              onClick={() => {
+                window.open(baseUrl + "/uptime")
+              }}
+              style={buttonStyle}
+            >
+              Open /uptime
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                verifyTdxInBrowser()
+              }}
+              style={buttonStyle}
+            >
+              Verify TDX/SGX in browser
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              fontFamily: "monospace",
+              padding: "0 6px",
+              fontSize: "0.8em",
+              color: "#333",
+              maxWidth: 360,
+              overflowWrap: "anywhere",
+              textAlign: "left",
+            }}
+          >
+            {verifyResult && (
+              <div style={{ marginBottom: 6 }}>{verifyResult}</div>
+            )}
+            <div style={{ marginBottom: 6 }}>Server: {baseUrl}</div>
+            <div style={{ marginBottom: 6 }}>MRTD: {mrtd}</div>
+            <div style={{ marginBottom: 6 }}>report_data: {reportData}</div>
+            <div style={{ marginBottom: 6 }}>
+              X25519 tunnel key:{" "}
+              {enc?.serverX25519PublicKey
+                ? hex(enc.serverX25519PublicKey)
+                : "--"}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
