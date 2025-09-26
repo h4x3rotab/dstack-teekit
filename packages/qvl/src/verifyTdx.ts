@@ -89,13 +89,13 @@ export async function verifyPCKChain(
   }
 
   // If the terminal certificate is self-signed, verify its signature
-  const terminal = chain[chain.length - 1]
-  if (terminal && terminal.subject === terminal.issuer) {
-    const valid = await terminal.verify(terminal)
-    if (!valid) {
-      return { status: "invalid", root: null, chain: [] }
-    }
-  }
+  // const terminal = chain[chain.length - 1]
+  // if (terminal && terminal.subject === terminal.issuer) {
+  //   const valid = await terminal.verify(terminal)
+  //   if (!valid) {
+  //     return { status: "invalid", root: null, chain: [] }
+  //   }
+  // }
 
   // Cryptographically verify signatures along the chain: each child signed by its parent
   for (let i = 0; i < chain.length - 1; i++) {
