@@ -22,7 +22,7 @@ import {
 export const baseUrl =
   document.location.hostname === "localhost"
     ? "http://localhost:3001"
-    : "https://34.28.44.70"
+    : `${document.location.protocol}//${document.location.hostname}`
 
 const enc = await TunnelClient.initialize(baseUrl, {
   match: (quote) => {
