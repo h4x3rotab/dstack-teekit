@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Set up nginx to proxy port 443->3001 with self-signed HTTPS
+# Set up nginx to proxy port 443->3001 with self-signed HTTPS, for Ubuntu.
 sudo apt update && sudo apt install -y nginx openssl
 sudo mkdir -p /etc/nginx/ssl && sudo openssl req -x509 -nodes -newkey rsa:2048 -days 365 -subj "/CN=$(hostname)" -keyout /etc/nginx/ssl/self.key -out /etc/nginx/ssl/self.crt
 sudo tee /etc/nginx/conf.d/https-3000-proxy.conf >/dev/null <<'EOF'
