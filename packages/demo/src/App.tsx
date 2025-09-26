@@ -19,10 +19,10 @@ import {
   occlumSgxBase64,
 } from "../shared/samples.js"
 
-const baseUrl =
+export const baseUrl =
   document.location.hostname === "localhost"
     ? "http://localhost:3001"
-    : "https://ra-https.up.railway.app"
+    : "https://34.28.44.70"
 
 const enc = await TunnelClient.initialize(baseUrl, {
   match: (quote) => {
