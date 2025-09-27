@@ -65,8 +65,11 @@ async function main() {
   const app = express()
   app.get("/hello", (_req, res) => res.status(200).send("world"))
 
-  const quote: Uint8Array = Uint8Array.fromHex('...') /* load from your TEE */
-  const tunnelServer = await TunnelServer.initialize(app, quote)
+  async function getQuote(x25519PublicKey: Uint8Array): Promise<Uint8Array> {
+    // Return a Uint8Array quote, optionally binding it to x25519PublicKey
+    return Uint8Array.fromHex('...')
+  }
+  const tunnelServer = await TunnelServer.initialize(app, getQuote)
 
   // Optional: WebSocket support via the built-in mock server
   tunnelServer.wss.on("connection", (ws) => {
@@ -144,7 +147,10 @@ import {
 } from "ra-https-tunnel"
 
 class TunnelServer {
-  static initialize(app: Express, quote: Uint8Array): Promise<TunnelServer>
+  static initialize(
+    app: Express,
+    getQuote: (x25519PublicKey: Uint8Array) => Promise<Uint8Array> | Uint8Array,
+  ): Promise<TunnelServer>
   server: http.Server                // call `server.listen(...)` to bind a port.
   wss: ServerRAMockWebSocketServer   // emits "connection" and manages `ServerRAMockWebSocket` clients
 }

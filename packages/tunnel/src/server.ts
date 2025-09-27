@@ -53,7 +53,10 @@ type TunnelServerConfig = {
  * and messages will be encrypted and decrypted in-flight.
  *
  * ```
- * const { wss, server } = await TunnelServer.initialize(app)
+ * const { wss, server } = await TunnelServer.initialize(app, async (x25519PublicKey) => {
+ *   // return a Uint8Array quote bound to x25519PublicKey
+ *   return myQuote
+ * })
  *
  * wss.on("connection", (ws: WebSocket) => {
  *   // Handle incoming messages
@@ -152,11 +155,12 @@ export class TunnelServer {
 
   static async initialize(
     app: Express,
-    quote: Uint8Array,
+    getQuote: (x25519PublicKey: Uint8Array) => Promise<Uint8Array> | Uint8Array,
     config?: TunnelServerConfig,
   ): Promise<TunnelServer> {
     await sodium.ready
     const { publicKey, privateKey } = sodium.crypto_box_keypair()
+    const quote = await Promise.resolve(getQuote(publicKey))
     return new TunnelServer(app, quote, publicKey, privateKey, config)
   }
 

@@ -78,7 +78,7 @@ test.serial(
     })
 
     const quote = loadQuote({ tdxv4: true })
-    const tunnelServer = await TunnelServer.initialize(app, quote)
+    const tunnelServer = await TunnelServer.initialize(app, async () => quote)
     await new Promise<void>((resolve) => {
       tunnelServer.server.listen(0, "127.0.0.1", () => resolve())
     })
@@ -221,7 +221,7 @@ test.serial(
     })
 
     const quote = loadQuote({ tdxv4: true })
-    const tunnelServer = await TunnelServer.initialize(app, quote)
+    const tunnelServer = await TunnelServer.initialize(app, async () => quote)
     await new Promise<void>((resolve) => {
       tunnelServer.server.listen(0, "127.0.0.1", () => resolve())
     })

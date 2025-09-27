@@ -21,35 +21,39 @@ import fs from "node:fs"
 import { exec } from "node:child_process"
 import { base64 } from "@scure/base"
 
-const quote = await new Promise<Uint8Array>(async (resolve, reject) => {
-  // If config.json isn't set up, return a sample quote
-  if (!fs.existsSync("config.json")) {
-    console.log(
-      "[ra-https-demo] TDX config.json not found, serving sample quote",
-    )
-    const { tappdV4Base64 } = await import("./shared/samples.js")
-    resolve(base64.decode(tappdV4Base64))
-    return
-  }
-
-  // Otherwise, get a quote from SEAM (requires root)
-  console.log("[ra-https-demo] Getting a quote")
-  exec("trustauthority-cli evidence -c config.json", (err, stdout) => {
-    if (err) {
-      reject(err)
+async function getQuote(x25519PublicKey: Uint8Array): Promise<Uint8Array> {
+  return await new Promise<Uint8Array>(async (resolve, reject) => {
+    // If config.json isn't set up, return a sample quote
+    if (!fs.existsSync("config.json")) {
+      console.log(
+        "[ra-https-demo] TDX config.json not found, serving sample quote",
+      )
+      const { tappdV4Base64 } = await import("./shared/samples.js")
+      resolve(base64.decode(tappdV4Base64))
+      return
     }
 
-    try {
-      const response = JSON.parse(stdout)
-      resolve(base64.decode(response.tdx.quote))
-    } catch (err) {
-      reject(err)
-    }
+    // Otherwise, get a quote from the SEAM (requires root)
+    console.log("[ra-https-demo] Getting a quote")
+    const userDataB64 = base64.encode(x25519PublicKey)
+    const cmd = `trustauthority-cli evidence --tdx --user-data '${userDataB64}' -c config.json`
+    exec(cmd, (err, stdout) => {
+      if (err) {
+        reject(err)
+      }
+
+      try {
+        const response = JSON.parse(stdout)
+        resolve(base64.decode(response.tdx.quote))
+      } catch (err) {
+        reject(err)
+      }
+    })
   })
-})
+}
 
 const app = express()
-const { server, wss } = await TunnelServer.initialize(app, quote)
+const { server, wss } = await TunnelServer.initialize(app, getQuote)
 
 /* ********************************************************************************
  * End RA-HTTPS tunnel code.
