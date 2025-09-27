@@ -1,3 +1,21 @@
+/** Used by trustauthority-cli to bind the public keys we provide to report_data. */
+export type VerifierData = {
+  val: Uint8Array
+  iat: Uint8Array
+  signature?: Uint8Array
+}
+
+/** Quote package including Intel VerifierData. */
+export type QuoteData = {
+  quote: Uint8Array
+  verifier_data?: VerifierData
+  runtime_data?: Uint8Array
+}
+
+/**
+ * RA-HTTPS WebSocket payloads.
+ */
+
 export type RAEncryptedHTTPRequest = {
   type: "http_request"
   requestId: string
@@ -61,6 +79,8 @@ export type ControlChannelKXAnnounce = {
   type: "server_kx"
   x25519PublicKey: string // base64
   quote: string // base64
+  runtime_data: string | null // base64
+  verifier_data: string | null // cbor base64
 }
 
 // Sent by the client to deliver a symmetric key sealed to the server pubkey.
