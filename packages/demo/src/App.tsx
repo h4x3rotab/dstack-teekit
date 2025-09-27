@@ -34,13 +34,14 @@ const tunnelInfo: {
 const UPTIME_REFRESH_MS = 10000
 
 const enc = await TunnelClient.initialize(baseUrl, {
-  match: (quote) => {
+  match: async (quote) => {
     if (!("mr_td" in quote.body)) {
       return false
     }
     tunnelInfo.mrtd = hex(quote.body.mr_td)
     tunnelInfo.report_data = hex(quote.body.report_data)
-    return true
+
+    return await enc.isQuotedReportBound(quote)
   },
 })
 
@@ -64,8 +65,11 @@ function App() {
   const [hiddenMessagesCount, setHiddenMessagesCount] = useState<number>(0)
   const [verifyResult, setVerifyResult] = useState<string>("")
   const [swCounter, setSwCounter] = useState<number>(0)
-  const [mrtd, setMrtd] = useState<string>("")
-  const [reportData, setReportData] = useState<string>("")
+  const [attestedMrtd, setAttestedMrtd] = useState<string>("")
+  const [expectedReportData, setExpectedReportData] = useState<string>("")
+  const [attestedReportData, setAttestedReportData] = useState<string>("")
+  const [verifierNonce, setVerifierNonce] = useState<string>("")
+  const [verifierNonceIat, setVerifierNonceIat] = useState<string>("")
   const initializedRef = useRef<boolean>(false)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -137,9 +141,16 @@ function App() {
 
     ws.onopen = () => {
       setConnected(true)
-      if (tunnelInfo.mrtd) setMrtd(tunnelInfo.mrtd)
-      if (tunnelInfo.report_data) setReportData(tunnelInfo.report_data)
+      if (tunnelInfo.mrtd) setAttestedMrtd(tunnelInfo.mrtd)
+      if (tunnelInfo.report_data) setAttestedReportData(tunnelInfo.report_data)
       console.log("Connected to chat server")
+
+      enc.getExpectedReportData().then((expectedReportData: Uint8Array) => {
+        setExpectedReportData(hex(expectedReportData ?? new Uint8Array()))
+        setVerifierNonce(hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()))
+        setVerifierNonceIat(hex(enc.reportBindingData?.verifierData?.iat ?? new Uint8Array()))
+      })
+
       setTimeout(() => {
         inputRef.current?.focus()
       }, 1)
@@ -462,13 +473,29 @@ function App() {
               <div style={{ marginBottom: 6 }}>{verifyResult}</div>
             )}
             <div style={{ marginBottom: 6 }}>Server: {baseUrl}</div>
-            <div style={{ marginBottom: 6 }}>MRTD: {mrtd}</div>
-            <div style={{ marginBottom: 6 }}>report_data: {reportData}</div>
+            <div style={{ marginBottom: 6 }}>MRTD: {attestedMrtd}</div>
+            <div style={{ marginBottom: 6 }}>report_data: {attestedReportData}</div>
+
+            <hr style={{ margin: "12px 0", border: "none", borderBottom: "1px solid #ccc" }}/>
             <div style={{ marginBottom: 6 }}>
               X25519 tunnel key:{" "}
               {enc?.serverX25519PublicKey
                 ? hex(enc.serverX25519PublicKey)
                 : "--"}
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              Nonce:{" "}
+              {verifierNonce}
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              Nonce issued at:{" "}
+              {verifierNonceIat}
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              Expected report_data:{" "}
+              <span style={{ color: expectedReportData === attestedReportData ? 'green' : 'red' }}>
+                {expectedReportData}
+              </span>
             </div>
           </div>
         </div>

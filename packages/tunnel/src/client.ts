@@ -37,7 +37,7 @@ import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 export type TunnelClientConfig = {
   mrtd?: string
   report_data?: string
-  match?: (quote: TdxQuote | SgxQuote) => boolean
+  match?: (quote: TdxQuote | SgxQuote) => boolean | Promise<boolean>
   sgx?: boolean // default to TDX
 }
 
@@ -252,14 +252,8 @@ export class TunnelClient {
           ) {
             throw new Error("Error opening channel: invalid report_data")
           }
-          if (
-            this.config.match !== undefined &&
-            this.config.match(validQuote) !== true
-          ) {
-            throw new Error("Error opening channel: custom validation failed")
-          }
 
-          // Decode and store report binding data
+          // Decode and store report binding data from server
           try {
             const runtimeData = message.runtime_data
               ? scureBase64.decode(message.runtime_data)
@@ -274,19 +268,34 @@ export class TunnelClient {
             console.error("ra-https: Malformed report binding data")
           }
 
-          // Generate and send a symmetric encryption key
-          try {
-            const serverPub = sodium.from_base64(
-              message.x25519PublicKey,
-              sodium.base64_variants.ORIGINAL,
+          // Decode and store X25519 key from server
+          const serverPub = sodium.from_base64(
+            message.x25519PublicKey,
+            sodium.base64_variants.ORIGINAL,
+          )
+          const symmetricKey = sodium.crypto_secretbox_keygen()
+          const sealed = sodium.crypto_box_seal(symmetricKey, serverPub)
+          this.serverX25519PublicKey = serverPub
+          this.symmetricKey = symmetricKey
+
+          // Call custom validation after binding data is set
+          if (
+            this.config.match !== undefined &&
+            (await this.config.match(validQuote)) !== true
+          ) {
+            throw new Error(
+              "Error opening channel: custom MRTD/report_data validation failed",
             )
+          }
 
-            const symmetricKey = sodium.crypto_secretbox_keygen()
-            const sealed = sodium.crypto_box_seal(symmetricKey, serverPub)
+          // Validate report binding
+          // if (this.config.checkReportBinding(validQuote) !== true) {
+          //   throw new Error("Error opening channel: report binding validation failed")
+          // }
 
-            this.serverX25519PublicKey = serverPub
-            this.symmetricKey = symmetricKey
-
+          // If we get here, client-side validation passed - open a channel
+          // by generating and sending a symmetric encryption key
+          try {
             const reply: ControlChannelKXConfirm = {
               type: "client_kx",
               sealedSymmetricKey: sodium.to_base64(
