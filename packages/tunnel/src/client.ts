@@ -37,7 +37,8 @@ import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 export type TunnelClientConfig = {
   mrtd?: string
   report_data?: string
-  match?: (quote: TdxQuote | SgxQuote) => boolean | Promise<boolean>
+  customVerifyQuote?: (quote: TdxQuote | SgxQuote) => boolean | Promise<boolean>
+  customVerifyReportData?: (client: TunnelClient) => boolean | Promise<boolean>
   sgx?: boolean // default to TDX
 }
 
@@ -65,6 +66,7 @@ export class TunnelClient {
   public id: string
   public ws: WebSocket | null = null
 
+  public quote: SgxQuote | TdxQuote | null = null
   public serverX25519PublicKey?: Uint8Array
   public symmetricKey?: Uint8Array // 32 byte key for XSalsa20-Poly1305
 
@@ -220,7 +222,7 @@ export class TunnelClient {
         if (isControlChannelKXAnnounce(message)) {
           let valid, validQuote, mrtd, report_data
 
-          // Parse and validate quote provided by the control channel
+          // Decode and store quote provided by the control channel
           if (!message.quote || message.quote.length === 0) {
             throw new Error("Error opening channel: empty quote")
           }
@@ -239,18 +241,6 @@ export class TunnelClient {
 
           if (!valid) {
             throw new Error("Error opening channel: invalid quote")
-          }
-          if (
-            this.config.mrtd !== undefined &&
-            hex(mrtd) !== this.config.mrtd
-          ) {
-            throw new Error("Error opening channel: invalid mrtd")
-          }
-          if (
-            this.config.report_data !== undefined &&
-            hex(report_data) !== this.config.report_data
-          ) {
-            throw new Error("Error opening channel: invalid report_data")
           }
 
           // Decode and store report binding data from server
@@ -278,23 +268,54 @@ export class TunnelClient {
           this.serverX25519PublicKey = serverPub
           this.symmetricKey = symmetricKey
 
-          // Call custom validation after binding data is set
+          // Validate quote binding, using default and custom validators
           if (
-            this.config.match !== undefined &&
-            (await this.config.match(validQuote)) !== true
+            this.config.customVerifyQuote !== undefined &&
+            (await this.config.customVerifyQuote(validQuote)) !== true
           ) {
             throw new Error(
-              "Error opening channel: custom MRTD/report_data validation failed",
+              "Error opening channel: custom quote body validation failed",
             )
           }
+          if (
+            this.config.mrtd !== undefined &&
+            hex(mrtd) !== this.config.mrtd
+          ) {
+            throw new Error("Error opening channel: invalid mrtd")
+          }
+          if (
+            this.config.report_data !== undefined &&
+            hex(report_data) !== this.config.report_data
+          ) {
+            throw new Error("Error opening channel: invalid report_data")
+          }
 
-          // Validate report binding
-          // if (this.config.checkReportBinding(validQuote) !== true) {
-          //   throw new Error("Error opening channel: report binding validation failed")
-          // }
+          // Validate report_data binding, using default and custom validators
+          if (this.config.customVerifyReportData === undefined) {
+            const val = this.reportBindingData?.verifierData?.val
+            const iat = this.reportBindingData?.verifierData?.iat
+            if (val === undefined) {
+              throw new Error("missing nonce, could not validate report_data")
+            } else if (iat === undefined) {
+              throw new Error("missing iat, could not validate report_data")
+            }
+            if (!(await this.isQuotedReportBound(validQuote))) {
+              throw new Error(
+                "Error opening channel: report_data did not equal sha512(nonce || iat || x25519key)",
+              )
+            }
+          } else {
+            if ((await this.config.customVerifyReportData(this)) !== true) {
+              throw new Error(
+                "Error opening channel: custom report_data validation failed",
+              )
+            }
+          }
 
-          // If we get here, client-side validation passed - open a channel
-          // by generating and sending a symmetric encryption key
+          // If we get here, quote and report_data validation passed
+          this.quote = validQuote
+
+          // Open a channel by generating and sending a symmetric encryption key
           try {
             const reply: ControlChannelKXConfirm = {
               type: "client_kx",

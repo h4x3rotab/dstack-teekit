@@ -9,7 +9,7 @@ import {
 import "./App.css"
 
 import { TunnelClient } from "ra-https-tunnel"
-import { verifyTdxBase64, verifySgxBase64, hex } from "ra-https-qvl"
+import { verifyTdxBase64, verifySgxBase64, hex, isTdxQuote } from "ra-https-qvl"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
@@ -26,23 +26,12 @@ export const baseUrl =
       ? "https://ra-https.canvas.xyz"
       : `${document.location.protocol}//${document.location.hostname}`
 
-const tunnelInfo: {
-  mrtd?: string
-  report_data?: string
-} = {}
-
 const UPTIME_REFRESH_MS = 10000
 
 const enc = await TunnelClient.initialize(baseUrl, {
-  match: async (quote) => {
-    if (!("mr_td" in quote.body)) {
-      return false
-    }
-    tunnelInfo.mrtd = hex(quote.body.mr_td)
-    tunnelInfo.report_data = hex(quote.body.report_data)
-
-    return await enc.isQuotedReportBound(quote)
-  },
+  // Don't actually validate anything
+  customVerifyQuote: async () => true,
+  customVerifyReportData: async () => true,
 })
 
 const buttonStyle = {
@@ -141,10 +130,13 @@ function App() {
 
     ws.onopen = () => {
       setConnected(true)
-      if (tunnelInfo.mrtd) setAttestedMrtd(tunnelInfo.mrtd)
-      if (tunnelInfo.report_data) setAttestedReportData(tunnelInfo.report_data)
       console.log("Connected to chat server")
 
+      // Set up control panel UI with attested measurements, expected measurements, etc.
+      if (!enc.quote) throw new Error("unexpected: ws shouldn't open without a quote")
+      if (!isTdxQuote(enc.quote)) throw new Error("unexpected: should be a tdx quote")
+      setAttestedMrtd(hex(enc.quote.body.mr_td))
+      setAttestedReportData(hex(enc.quote.body.report_data))
       enc.getExpectedReportData().then((expectedReportData: Uint8Array) => {
         setExpectedReportData(hex(expectedReportData ?? new Uint8Array()))
         setVerifierNonce(hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()))
@@ -494,7 +486,7 @@ function App() {
             <div style={{ marginBottom: 6 }}>
               Expected report_data:{" "}
               <span style={{ color: expectedReportData === attestedReportData ? 'green' : 'red' }}>
-                {expectedReportData}
+                {expectedReportData || 'None'}
               </span>
             </div>
           </div>
