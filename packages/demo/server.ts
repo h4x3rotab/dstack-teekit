@@ -23,14 +23,17 @@ import { base64 } from "@scure/base"
 
 const quote = await new Promise<Uint8Array>(async (resolve, reject) => {
   // If config.json isn't set up, return a sample quote
-  console.log("[ra-https-demo] TDX config.json not found, serving sample quote")
   if (!fs.existsSync("config.json")) {
+    console.log(
+      "[ra-https-demo] TDX config.json not found, serving sample quote",
+    )
     const { tappdV4Base64 } = await import("./shared/samples.js")
     resolve(base64.decode(tappdV4Base64))
     return
   }
 
   // Otherwise, get a quote from SEAM (requires root)
+  console.log("[ra-https-demo] Getting a quote")
   exec("trustauthority-cli evidence -c config.json", (err, stdout) => {
     if (err) {
       reject(err)

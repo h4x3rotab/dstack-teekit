@@ -31,6 +31,8 @@ const tunnelInfo: {
   report_data?: string
 } = {}
 
+const UPTIME_REFRESH_MS = 10000
+
 const enc = await TunnelClient.initialize(baseUrl, {
   match: (quote) => {
     if (!("mr_td" in quote.body)) {
@@ -58,6 +60,7 @@ function App() {
   const [username] = useState<string>(getStoredUsername)
   const [connected, setConnected] = useState<boolean>(false)
   const [uptime, setUptime] = useState<string>("")
+  const [uptimeSpinKey, setUptimeSpinKey] = useState<number>(0)
   const [hiddenMessagesCount, setHiddenMessagesCount] = useState<number>(0)
   const [verifyResult, setVerifyResult] = useState<string>("")
   const [swCounter, setSwCounter] = useState<number>(0)
@@ -81,6 +84,8 @@ function App() {
       setUptime(data.uptime.formatted)
     } catch (error) {
       console.error("Failed to fetch uptime:", error)
+    } finally {
+      setUptimeSpinKey((k) => k + 1)
     }
   }, [])
 
@@ -96,7 +101,7 @@ function App() {
 
   useEffect(() => {
     fetchUptime()
-    const interval = setInterval(fetchUptime, 10000) // Update every 10 seconds
+    const interval = setInterval(fetchUptime, UPTIME_REFRESH_MS) // Update every 10 seconds
 
     if (!initializedRef.current) {
       initializedRef.current = true
@@ -334,6 +339,11 @@ function App() {
                 style={{ fontSize: "1.1em", fontWeight: 600, color: "#000" }}
               >
                 ~{uptime || "—"}
+                <span
+                  key={uptimeSpinKey}
+                  className="uptime-spinner"
+                  style={{ animationDuration: UPTIME_REFRESH_MS + "ms" }}
+                ></span>
               </div>
             </div>
             <div style={{ textAlign: "center" }}>
