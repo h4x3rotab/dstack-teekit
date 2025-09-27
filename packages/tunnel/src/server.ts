@@ -360,11 +360,15 @@ export class TunnelServer {
           ? parseBody(tunnelReq.body, tunnelReq.headers["content-type"])
           : undefined
 
-      // Patch req.unpipe() to do nothing. Express's finalHandler attempts
-      // to call unpipe() during cleanup to disconnect the request stream.
+      // Patch req.unpipe() and req.resume() because they may be called
+      // by Express's finalHandler during cleanup.
       try {
         req.unpipe = (_dest?: any) => {
           debug("req.unpipe called")
+          return req
+        }
+        req.resume = () => {
+          debug("req.resume called")
           return req
         }
       } catch {}
