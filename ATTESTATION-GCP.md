@@ -192,8 +192,63 @@ Request Id: 2d91b0a5-f26d-4348-83a6-c8a4cead1ca7
 eyJhb...
 ```
 
-## Verifying an Attestation
+## Setting up the Demo
+
+First, open ports 80 and 443 for web traffic.
 
 ```
-sudo trustauthority-cli evidence --tdx -c config.json > attestation.json
+gcloud compute firewall-rules create allow-http-80 \
+    --direction=INGRESS \
+    --priority=1000 \
+    --network=default \
+    --action=ALLOW \
+    --rules=tcp:80 \
+    --source-ranges=0.0.0.0/0 \
+    --target-tags=gcp-tdx-vm
+
+gcloud compute firewall-rules create allow-https-443 \
+    --direction=INGRESS \
+    --priority=1000 \
+    --network=default \
+    --action=ALLOW \
+    --rules=tcp:443 \
+    --source-ranges=0.0.0.0/0 \
+    --target-tags=gcp-tdx-vm
+
+gcloud compute instances add-tags gcp-tdx-vm --tags gcp-tdx-vm
+```
+
+Now, set up Nginx. This can be done with a domain, or with a
+self-signed certificate (which will produce a warning in browsers and
+may break some features).
+
+To use Let's Encrypt with your domain, configure it with an A record
+to point to your TDX VM's IP, and then run, from the ra-https repo root:
+
+```
+scripts/setup-nginx-certbot.sh <example.com>
+```
+
+If you do not have a domain, you can use a self-signed certificate.
+
+```
+scripts/setup-nginx-self.sh
+```
+
+Now, you can install a systemd service to run our demo server:
+
+```
+scripts/setup-systemd-service.sh
+```
+
+Create a Intel TDX CLI config.json inside `packages/demo`, and then restart the service:
+
+```
+systemctl restart ra-https
+```
+
+To view logs:
+
+```
+journalctl -uf ra-https
 ```
