@@ -50,8 +50,12 @@ async function getQuote(x25519PublicKey: Uint8Array): Promise<QuoteData> {
         const response = JSON.parse(stdout)
         resolve({
           quote: base64.decode(response.tdx.quote),
-          verifier_data: response.tdx.verifier_nonce,
-          runtime_data: response.tdx.runtime_data,
+          verifier_data: {
+            iat: base64.decode(response.tdx.verifier_nonce.iat),
+            val: base64.decode(response.tdx.verifier_nonce.val),
+            signature: base64.decode(response.tdx.verifier_nonce.signature),
+          },
+          runtime_data: base64.decode(response.tdx.runtime_data),
         })
       } catch (err) {
         reject(err)

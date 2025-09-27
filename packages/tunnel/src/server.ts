@@ -118,6 +118,15 @@ export class TunnelServer {
     this.verifierData = quoteData.verifier_data ?? null
     this.runtimeData = quoteData.runtime_data ?? null
 
+    if (
+      typeof this.runtimeData === "string" ||
+      Object.values(this.verifierData ?? []).some(
+        (value) => typeof value === "string",
+      )
+    ) {
+      throw new Error("quoteData fields must be Uint8Array")
+    }
+
     this.x25519PublicKey = publicKey
     this.x25519PrivateKey = privateKey
     this.server = http.createServer(app)
