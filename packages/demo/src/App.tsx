@@ -23,7 +23,7 @@ export const baseUrl =
   document.location.hostname === "localhost"
     ? "http://localhost:3001"
     : document.location.hostname === "ra-https.vercel.app"
-      ? "https://ra-https.canvas.xyz/"
+      ? "https://ra-https.canvas.xyz"
       : `${document.location.protocol}//${document.location.hostname}`
 
 const tunnelInfo: {
