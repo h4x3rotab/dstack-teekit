@@ -1,4 +1,5 @@
-import { getSgxSignedRegion, parseSgxQuote } from "./structs.js"
+import { getSgxSignedRegion } from "./structs.js"
+import { parseSgxQuote } from "./parse.js"
 import {
   computeCertSha256Hex,
   extractPemCertificates,

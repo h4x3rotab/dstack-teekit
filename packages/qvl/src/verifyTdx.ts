@@ -1,9 +1,6 @@
 import { QV_X509Certificate, BasicConstraintsExtension } from "./x509.js"
-import {
-  getTdx10SignedRegion,
-  getTdx15SignedRegion,
-  parseTdxQuote,
-} from "./structs.js"
+import { getTdx10SignedRegion, getTdx15SignedRegion } from "./structs.js"
+import { parseTdxQuote } from "./parse.js"
 import {
   computeCertSha256Hex,
   extractPemCertificates,

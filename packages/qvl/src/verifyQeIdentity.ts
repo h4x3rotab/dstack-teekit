@@ -1,4 +1,4 @@
-import { parseTdxQuote } from "./structs.js"
+import { parseTdxQuote } from "./parse.js"
 import { base64 as scureBase64, hex as scureHex } from "@scure/base"
 
 type QeIdentity = {
