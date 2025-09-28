@@ -206,4 +206,59 @@ export class QV_X509Certificate {
     }
     return null
   }
+
+  /**
+   * Extract the Intel FMSPC (6 bytes) from the PCK certificate extension.
+   * Intel SGX/TDX PCK certificates carry FMSPC under OID 1.2.840.113741.1.13.1.4
+   * Returns an uppercase 12-hex-character string, or null if not present.
+   */
+  getFmspcHex(): string | null {
+    try {
+      const oid = "1.2.840.113741.1.13.1"
+      const ext = this._cert.extensions?.find((e) => e.extnID === oid)
+      if (!ext) return null
+
+      // Decode the Intel SGX extension, which is a DER-encoded sequence:
+      const outerView = ext.extnValue.valueBlock.valueHexView
+      const inner = new Uint8Array(
+        outerView.buffer,
+        outerView.byteOffset,
+        outerView.byteLength,
+      )
+      const decoded = fromBER(inner)
+      if (decoded.offset === -1) return null
+
+      const seq: any = decoded.result
+      const children = Array.isArray(seq?.valueBlock?.value)
+        ? seq.valueBlock.value
+        : []
+
+      // Iterate over extensions to find FMSPC.
+      for (const entry of children) {
+        const parts: any[] = Array.isArray(entry?.valueBlock?.value)
+          ? entry.valueBlock.value
+          : []
+        if (parts.length < 2) continue
+
+        const subOid = parts[0]?.valueBlock?.toString?.()
+        if (subOid !== "1.2.840.113741.1.13.1.4") continue
+
+        // Extract the value bytes for FMSPC (expected 6 bytes)
+        const valueNode: any = parts[1]
+        let bytes: Uint8Array | null = null
+
+        // Direct primitive value
+        const direct = valueNode?.valueBlock?.valueHex
+        if (direct && direct.byteLength !== undefined) {
+          bytes = new Uint8Array(direct)
+          return scureHex.encode(bytes)
+        }
+      }
+
+      // Return if we didn't find anything.
+      return null
+    } catch {
+      return null
+    }
+  }
 }
