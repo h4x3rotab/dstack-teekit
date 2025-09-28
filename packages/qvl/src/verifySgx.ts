@@ -173,7 +173,8 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   const date = config?.date
   const extraCertdata = config?.extraCertdata
   const crls = config?.crls
-  const { signature, header } = parseSgxQuote(quote)
+  const parsedQuote = parseSgxQuote(quote)
+  const { signature, header } = parsedQuote
   const certs = extractPemCertificates(signature.cert_data)
   let { status, root, fmspc } = await verifyPCKChain(
     certs,
@@ -225,7 +226,6 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
     throw new Error("verifySgx: only ECDSA att_key_type is supported")
   }
   if (signature.cert_data_type !== 5 && signature.cert_data_type !== 1) {
-    // TODO
     throw new Error("verifySgx: only PCK cert_data is supported")
   }
 
@@ -237,6 +237,12 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   }
   if (!(await verifySgxQuoteSignature(quote))) {
     throw new Error("verifySgx: invalid signature over quote")
+  }
+
+  if (config?.verifyFmspc !== undefined) {
+    if (fmspc === null || !(await config.verifyFmspc(fmspc, parsedQuote))) {
+      throw new Error("verifySgx: TCB validation failed")
+    }
   }
   return true
 }

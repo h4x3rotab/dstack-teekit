@@ -22,6 +22,10 @@ export interface VerifyConfig {
   pinnedRootCerts?: QV_X509Certificate[]
   date?: number
   extraCertdata?: string[]
+  verifyFmspc?: (
+    fmspcHex: string,
+    quote: TdxQuote | SgxQuote,
+  ) => Promise<boolean>
 }
 
 export const DEFAULT_PINNED_ROOT_CERTS: QV_X509Certificate[] = [
@@ -363,7 +367,8 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
   const date = config?.date
   const extraCertdata = config?.extraCertdata
   const crls = config?.crls
-  const { signature, header } = parseTdxQuote(quote)
+  const parsedQuote = parseTdxQuote(quote)
+  const { signature, header } = parsedQuote
   const certs = extractPemCertificates(signature.cert_data)
   let { status, root, fmspc } = await verifyPCKChain(
     certs,
@@ -425,6 +430,12 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
   }
   if (!(await verifyTdxQuoteSignature(quote))) {
     throw new Error("verifyTdx: invalid signature over quote")
+  }
+
+  if (config?.verifyFmspc !== undefined) {
+    if (fmspc === null || !(await config.verifyFmspc(fmspc, parsedQuote))) {
+      throw new Error("verifyTdx: TCB validation failed")
+    }
   }
 
   return true
