@@ -4,6 +4,7 @@ import {
   QV_X509Certificate,
   hex,
   verifySgx,
+  _verifySgx,
   parseSgxQuote,
   getSgxSignedRegion,
 } from "ra-https-qvl"
@@ -57,6 +58,12 @@ test.serial("Verify an SGX quote from Intel, no quote signature", async (t) => {
     fs.readFileSync("test/sample/sgx/intermediateCaCrl.der"),
   ]
 
+  const { fmspc } = await _verifySgx(quote, {
+    crls: [],
+    extraCertdata: certdata,
+  })
+  t.is(fmspc, "00707f000000")
+
   t.true(
     await verifySgx(quote, {
       pinnedRootCerts: [new QV_X509Certificate(root[0])],
@@ -70,6 +77,7 @@ test.serial("Verify an SGX quote from Intel, no quote signature", async (t) => {
 test.serial("Verify an SGX quote from Occlum", async (t) => {
   const quote = fs.readFileSync("test/sample/sgx-occlum.dat")
   const { header, body } = parseSgxQuote(quote)
+  const { fmspc } = await _verifySgx(quote)
 
   const expectedMrEnclave =
     "9c90fd81f6e9fe64b46b14f0623523a52d6a5678482988c408f6adffe6301e2c"
@@ -80,6 +88,7 @@ test.serial("Verify an SGX quote from Occlum", async (t) => {
   t.is(header.tee_type, 0)
   t.is(hex(body.mr_enclave), expectedMrEnclave)
   t.is(hex(body.report_data), expectedReportData)
+  t.is(fmspc, "30606a000000")
 
   t.true(await verifySgx(quote, { date: BASE_TIME, crls: [] }))
 })
@@ -87,6 +96,7 @@ test.serial("Verify an SGX quote from Occlum", async (t) => {
 test.serial("Verify an SGX quote from chinenyeokafor", async (t) => {
   const quote = fs.readFileSync("test/sample/sgx-chinenyeokafor.dat")
   const { header, body } = parseSgxQuote(quote)
+  const { fmspc } = await _verifySgx(quote)
 
   const expectedMrEnclave =
     "0696ab235b2d339e68a4303cb64cde005bb8cdf2448bed742ac8ea8339bd0cb7"
@@ -97,6 +107,7 @@ test.serial("Verify an SGX quote from chinenyeokafor", async (t) => {
   t.is(header.tee_type, 0)
   t.is(hex(body.mr_enclave), expectedMrEnclave)
   t.is(hex(body.report_data), expectedReportData)
+  t.is(fmspc, "90c06f000000")
 
   t.true(await verifySgx(quote, { date: BASE_TIME, crls: [] }))
 })
@@ -104,6 +115,7 @@ test.serial("Verify an SGX quote from chinenyeokafor", async (t) => {
 test.serial("Verify an SGX quote from TLSN, quote9", async (t) => {
   const quote = fs.readFileSync("test/sample/sgx-tlsn-quote9.dat")
   const { header, body } = parseSgxQuote(quote)
+  const { fmspc } = await _verifySgx(quote)
 
   const expectedMrEnclave =
     "50a6a608c1972408f94379f83a7af2ea55b31095f131efe93af74f5968a44f29"
@@ -114,6 +126,7 @@ test.serial("Verify an SGX quote from TLSN, quote9", async (t) => {
   t.is(header.tee_type, 0)
   t.is(hex(body.mr_enclave), expectedMrEnclave)
   t.is(hex(body.report_data), expectedReportData)
+  t.is(fmspc, "00906ed50000")
 
   t.true(await verifySgx(quote, { date: BASE_TIME, crls: [] }))
 })
@@ -121,6 +134,7 @@ test.serial("Verify an SGX quote from TLSN, quote9", async (t) => {
 test.serial("Verify an SGX quote from TLSN, quote_dev", async (t) => {
   const quote = fs.readFileSync("test/sample/sgx-tlsn-quotedev.dat")
   const { header, body } = parseSgxQuote(quote)
+  const { fmspc } = await _verifySgx(quote)
 
   const expectedMrEnclave =
     "db5e55d3190d92512e4eae09d697b4b5fe30c2212e1ad6db5681379608c46204"
@@ -131,8 +145,14 @@ test.serial("Verify an SGX quote from TLSN, quote_dev", async (t) => {
   t.is(header.tee_type, 0)
   t.is(hex(body.mr_enclave), expectedMrEnclave)
   t.is(hex(body.report_data), expectedReportData)
+  t.is(fmspc, "00906ed50000")
 
-  t.true(await verifySgx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifySgx(quote, {
+      date: BASE_TIME,
+      crls: [],
+    }),
+  )
 })
 
 // Negative tests based on the Occlum SGX quote
