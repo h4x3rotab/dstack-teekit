@@ -1,26 +1,55 @@
 # ra-https
 
 This repository implements RA-HTTPS and RA-WSS, a set of protocols for
-securely connecting to remotely attested Secure Enclaves and Trusted
-Execution Environments without custom X.509 verification flows.
+connecting to Secure Enclaves and Trusted Execution Environments.
 
-## Features
+Conventionally, browsers have no way of verifying they are connected
+to a TEE, because they don't expose certificate information that a web
+page can use to prove a connection terminates inside the enclave. This
+breaks the security and privacy of TEEs, since SSL proxies (like
+Cloudflare) can trivially see and modify traffic to the TEE.
 
-- Encrypted HTTP requests via a `fetch`-compatible client API
-- Encrypted WebSockets via a browser-like `WebSocket` client API
-- TDX v4/v5 & SGX quote validation before opening an encrypted channel
-- ServiceWorker for upgrading all HTTP requests from a browser page
-  to use the encrypted channel
+This package includes a built-in secure channel that authenticates the
+TEE and ensures it's running up-to-date hardware, entirely from in the
+browser.
+
+This makes it possible to build verifiable, private web applications,
+where neither the developer nor host of the application can see your
+data, and end users can verify the code they are interacting with.
+
+It also makes it possible to build composable backends for web
+applications, private AI clouds, private sync backends for local-first
+software, and other kinds of software with privacy and composability
+guarantees.
+
+## Components
+
+- ra-https-tunnel:
+  - Encrypted HTTP requests via a `fetch`-compatible API
+  - Encrypted WebSockets via a `WebSocket`-compatible API
+  - ServiceWorker for upgrading HTTP requests from a browser page
+    to use the encrypted channel
+- ra-https-qvl:
+  - Lightweight, WebCrypto-based SGX/TDX quote verification library
+  - Validates the full chain of trust from the root CA, down to report binding
+  - Embedded CRL/TCB validation that can be used from your browser
+- ra-https-demo:
+  - A [demo application](https://ra-https.vercel.app/) that supports
+    HTTPS and WSS requests over the encrypted channel, both with and without
+    the embedded ServiceWorker.
 
 ## Usage
 
-On the client, create a `TunnelClient()` object, and switch out
+On the client, create a `TunnelClient()` object. You should switch out
 Node.js `fetch` and `WebSocket` instances for our `fetch` and
-`WebSocket` wrappers.
+`WebSocket` wrappers, exposed on the `TunnelClient()`.
 
-Your client will validate that the server has the expected MRTD and
-REPORT_DATA before opening a connection, ensuring that all traffic
-terminates inside the trusted execution environment.
+It is your responsibility to configure TunnelClient with the expected
+`mrtd` and `report_data` measurements, certificate revocation lists,
+and a verifyTcb() function if you wish to check for freshness of the TCB.
+
+Your client will validate these before opening a connection, ensuring
+that all traffic terminates inside the trusted execution environment.
 
 ```ts
 import { TunnelClient } from "ra-https-tunnel"
@@ -37,6 +66,8 @@ async function main() {
   const client = await TunnelClient.initialize(origin, {
     mrtd: expectedMrtd,
     report_data: expectedReportData,
+    crl: [], // certificate revocation list
+    verifyTcb: () => true, // no additional checks for TCB freshness
     // sgx: true // defaults to TDX otherwise
   })
 
@@ -124,15 +155,14 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
 
 ## Considerations & Limitations
 
-- All WebSocket upgrades to the HTTP server (other than `/__ra__`) are rejected. Application WebSockets must use `tunnelServer.wss`.
+- For security reasons, we currently require that all WebSocket connections to the HTTP server go through the encrypted channel.
 - Client WebSocket targets must use the same port as the tunnel `origin`.
 - One keypair is generated per server process; there’s no session resumption across processes. No support for load balancing (yet).
 - HTTP request bodies supported: string, `Uint8Array`, `ArrayBuffer`, and `ReadableStream`.
 - HTTP request/response bodies are buffered end-to-end; very large payloads cannot be streamed.
 - The default client request timeout is 30s and not configurable.
 - The client `WebSocket.send` does not accept `Blob`.
-- The client `fetch` does not natively serialize `FormData`; send a prepared multipart string if needed.
-- A single `TunnelClient` reuses one encrypted control channel; each `fetch` is multiplexed over it.
+- The client `fetch` does not natively serialize `FormData`.
 - WebSocket messages queued before `open` are automatically flushed once the socket opens.
 
 ## API
