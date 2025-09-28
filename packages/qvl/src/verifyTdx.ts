@@ -407,6 +407,7 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
     header,
     extraCertdata,
     pinnedRootCerts,
+    parsedQuote,
   } = await _verifyTdx(quote, config)
 
   if (status === "expired") {
@@ -453,6 +454,10 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
 
   if (fmspc === null) {
     throw new Error("verifyTdx: TCB missing fmspc")
+  }
+  if (config?.verifyTcb && !(await config.verifyTcb(fmspc, parsedQuote))) {
+    // throw new Error("verifyTdx: TCB invalid fmspc")
+    return false
   }
   return true
 }

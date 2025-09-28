@@ -114,6 +114,30 @@ export const TdxQuoteBody_1_5 = new r.Struct({
   mrservictd: new r.Buffer(48),
 })
 
+export type IntelTcbInfo = {
+  tcbInfo: {
+    version: number
+    issueDate: string
+    nextUpdate: string
+    fmspc: string
+    pceId: string
+    tcbType: number
+    tcbEvaluationDataNumber: number
+    tcbLevels: Array<{
+      tcb: { [k: string]: number }
+      tcbDate: string
+      tcbStatus:
+        | "UpToDate"
+        | "OutOfDate"
+        | "OutOfDateConfigurationNeeded"
+        | "ConfigurationNeeded"
+        | "Revoked"
+        | string
+    }>
+  }
+  signature?: string
+}
+
 export function readUInt16LE(buf: Uint8Array, offset: number): number {
   return new DataView(buf.buffer, buf.byteOffset + offset, 2).getUint16(0, true)
 }

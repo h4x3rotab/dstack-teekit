@@ -1,201 +1,267 @@
-import test from "ava"
+import test, { ExecutionContext } from "ava"
 import fs from "node:fs"
 import path from "node:path"
-import { verifySgx, isSgxQuote, QV_X509Certificate } from "ra-https-qvl"
-import { extractPemCertificates } from "ra-https-qvl/utils"
+import { base64 as scureBase64 } from "@scure/base"
+
+import {
+  verifySgx,
+  verifyTdx,
+  isSgxQuote,
+  isTdxQuote,
+  SgxQuote,
+  TdxQuote,
+  IntelTcbInfo,
+} from "ra-https-qvl"
 
 const BASE_TIME = Date.parse("2025-09-01")
 const SAMPLE_DIR = "test/sample"
 
-type IntelTcbInfo = {
-  tcbInfo: {
-    version: number
-    issueDate: string
-    nextUpdate: string
-    fmspc: string
-    pceId: string
-    tcbType: number
-    tcbEvaluationDataNumber: number
-    tcbLevels: Array<{
-      tcb: { [k: string]: number }
-      tcbDate: string
-      tcbStatus:
-        | "UpToDate"
-        | "OutOfDate"
-        | "OutOfDateConfigurationNeeded"
-        | "ConfigurationNeeded"
-        | "Revoked"
-        | string
-    }>
-  }
-  signature?: string
-}
-
-async function fetchAndCacheTcbInfo(fmspcHex: string): Promise<IntelTcbInfo> {
+async function fetchTcbInfo(fmspcHex: string): Promise<IntelTcbInfo> {
   const fmspc = fmspcHex.toLowerCase()
   const cachePath = path.join(SAMPLE_DIR, `tcbInfo-${fmspc}.json`)
 
-  // Return from cache when present
   if (fs.existsSync(cachePath)) {
     const raw = fs.readFileSync(cachePath, "utf8")
-    console.log("got tcbInfo from cache:", fmspcHex)
     return JSON.parse(raw)
+  } else {
+    console.log("[unexpected!] getting tcbInfo from API:", fmspcHex)
+    const url = `https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=${fmspc}`
+    const resp = await fetch(url, { headers: { Accept: "application/json" } })
+    if (!resp.ok) {
+      throw new Error(
+        `Failed to fetch TCB info for FMSPC=${fmspc}: ${resp.status} ${resp.statusText}`,
+      )
+    }
+    return await resp.json()
   }
-  console.log("getting tcbInfo from API:", fmspcHex)
-
-  const url = `https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=${fmspc}`
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  }
-
-  const resp = await fetch(url, { headers })
-  if (!resp.ok) {
-    throw new Error(
-      `Failed to fetch TCB info for FMSPC=${fmspc}: ${resp.status} ${resp.statusText}`,
-    )
-  }
-  const data = (await resp.json()) as IntelTcbInfo
-
-  // Ensure samples directory exists and write cache
-  fs.mkdirSync(SAMPLE_DIR, { recursive: true })
-  fs.writeFileSync(cachePath, JSON.stringify(data, null, 2))
-  return data
 }
 
-function isAcceptableStatus(status: string): boolean {
-  return (
-    status === "UpToDate" ||
-    status === "ConfigurationNeeded" ||
-    status === "OutOfDateConfigurationNeeded"
-  )
-}
+type TcbRef = { status?: string; freshnessOk?: boolean; fmspc?: string }
 
-// Builds a verifyFmspc callback that captures the evaluated state for assertions
-function buildVerifyFmspcHook(stateRef: {
-  status?: string
-  freshnessOk?: boolean
-}) {
-  return async (fmspcHex: string, quote: unknown): Promise<boolean> => {
-    try {
-      if (!isSgxQuote(quote as any)) return false
-      const parsed = quote as any
+// Builds a verifyTcb hook that captures the status & freshness
+function getVerifyTcb(stateRef: TcbRef) {
+  type Quote = SgxQuote | TdxQuote
 
-      // Fetch and evaluate
-      const tcbInfo = await fetchAndCacheTcbInfo(fmspcHex)
-      const cpuSvn = Array.from(parsed.body.cpu_svn as Uint8Array)
-      const pceSvn = parsed.header.pce_svn as number
-      const now = BASE_TIME
-      const freshnessOk =
-        Date.parse(tcbInfo.tcbInfo.issueDate) <= now &&
-        now <= Date.parse(tcbInfo.tcbInfo.nextUpdate)
-
-      let statusFound = "OutOfDate"
-      for (const level of tcbInfo.tcbInfo.tcbLevels) {
-        const tcb = level.tcb as any
-        const pceOk =
-          typeof tcb.pcesvn === "number" ? pceSvn >= tcb.pcesvn : true
-        let cpuOk = true
-        for (let comp = 1; comp <= 16; comp++) {
-          const key = `sgxtcbcomp${String(comp).padStart(2, "0")}svn`
-          if (Object.prototype.hasOwnProperty.call(tcb, key)) {
-            if (cpuSvn[comp - 1] < tcb[key]) {
-              cpuOk = false
-              break
-            }
-          }
-        }
-        if (cpuOk && pceOk) {
-          statusFound = level.tcbStatus
-          break
-        }
-      }
-
-      stateRef.status = statusFound
-      stateRef.freshnessOk = freshnessOk
-
-      // Accept only certain statuses and require freshness
-      return freshnessOk && isAcceptableStatus(statusFound)
-    } catch (e) {
-      // If TCB fetch fails (e.g., 404), treat as policy failure
-      stateRef.status = "Unavailable"
-      stateRef.freshnessOk = false
+  return async (fmspcHex: string, quote: Quote): Promise<boolean> => {
+    // Extract cpu_svn, pce_svn
+    let cpuSvn: number[] | null = null
+    let pceSvn: number | null = null
+    if (isSgxQuote(quote)) {
+      cpuSvn = Array.from(quote.body.cpu_svn)
+      pceSvn = quote.header.pce_svn
+    } else if (isTdxQuote(quote)) {
+      cpuSvn = Array.from(quote.body.tee_tcb_svn)
+      pceSvn = quote.header.pce_svn
+    } else {
       return false
     }
+
+    // Fetch and evaluate
+    const tcbInfo = await fetchTcbInfo(fmspcHex)
+    const now = BASE_TIME
+
+    // Check freshness
+    const freshnessOk =
+      Date.parse(tcbInfo.tcbInfo.issueDate) <= now &&
+      now <= Date.parse(tcbInfo.tcbInfo.nextUpdate)
+
+    // Determine the TCB status by finding the first Intel TCB level
+    // whose requirements are satisfied by the quote:
+    // - PCE SVN must be >= the level's pcesvn
+    // - For each CPU SVN component key present (sgxtcbcompXXsvn),
+    //   the quote's cpu_svn[XX-1] must be >= the level's value
+    // On first match, adopt that level's tcbStatus; otherwise keep
+    // the default "OutOfDate".
+    let statusFound = "OutOfDate"
+    for (const level of tcbInfo.tcbInfo.tcbLevels) {
+      const pceOk = pceSvn >= level.tcb.pcesvn
+      let cpuOk = true
+      for (let comp = 1; comp <= 16; comp++) {
+        const key = `sgxtcbcomp${String(comp).padStart(2, "0")}svn`
+        if (Object.prototype.hasOwnProperty.call(level.tcb, key)) {
+          if ((cpuSvn as number[])[comp - 1] < level.tcb[key]) {
+            cpuOk = false
+            break
+          }
+        }
+      }
+      if (cpuOk && pceOk) {
+        statusFound = level.tcbStatus
+        break
+      }
+    }
+
+    stateRef.fmspc = fmspcHex
+    stateRef.status = statusFound
+    stateRef.freshnessOk = freshnessOk
+    return (
+      freshnessOk && (status === "UpToDate" || status === "ConfigurationNeeded")
+    )
   }
 }
 
-function loadExtraCertsIfNeeded(samplePath: string): {
-  crls: Uint8Array[]
-  extraCertdata?: string[]
-  pinnedRoot?: QV_X509Certificate
-} {
-  if (samplePath.endsWith("test/sample/sgx/quote.dat")) {
-    const root = extractPemCertificates(
-      fs.readFileSync("test/sample/sgx/trustedRootCaCert.pem"),
-    )
-    const pckChain = extractPemCertificates(
-      fs.readFileSync("test/sample/sgx/pckSignChain.pem"),
-    )
-    const pckCert = extractPemCertificates(
-      fs.readFileSync("test/sample/sgx/pckCert.pem"),
-    )
-    const extraCertdata = [...root, ...pckChain, ...pckCert]
-    const crls = [
-      fs.readFileSync("test/sample/sgx/rootCaCrl.der"),
-      fs.readFileSync("test/sample/sgx/intermediateCaCrl.der"),
-    ]
-    return { crls, extraCertdata, pinnedRoot: new QV_X509Certificate(root[0]) }
-  }
-  return { crls: [] }
+async function assertTcb(
+  t: ExecutionContext<unknown>,
+  path: string,
+  config: {
+    _tdx: boolean
+    _b64?: boolean
+    _json?: boolean
+    valid: boolean
+    status: string
+    fresh: boolean
+    fmspc: string
+  },
+) {
+  const { _tdx, _b64, _json, valid, status, fresh, fmspc } = config
+  const quote = _b64
+    ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
+    : _json
+    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+    : fs.readFileSync(path)
+
+  const stateRef: TcbRef = {}
+  const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {
+    date: BASE_TIME,
+    crls: [],
+    verifyTcb: getVerifyTcb(stateRef),
+  })
+
+  t.is(valid, ok)
+  t.is(stateRef.fmspc, fmspc)
+  t.is(stateRef.status, status)
+  t.is(stateRef.freshnessOk, fresh)
 }
-
-async function runSgxSample(t: any, sampleRelPath: string) {
-  const quote = fs.readFileSync(sampleRelPath)
-  const state: { status?: string; freshnessOk?: boolean } = {}
-  const verifyHook = buildVerifyFmspcHook(state)
-  const extras = loadExtraCertsIfNeeded(sampleRelPath)
-
-  try {
-    const ok = await verifySgx(quote, {
-      date: BASE_TIME,
-      crls: extras.crls,
-      extraCertdata: extras.extraCertdata,
-      pinnedRootCerts: extras.pinnedRoot ? [extras.pinnedRoot] : undefined,
-      verifyFmspc: verifyHook,
-    })
-
-    // verifySgx succeeded: ensure our policy accepted the TCB status
-    t.true(ok)
-    t.truthy(state.status)
-    t.true(state!.freshnessOk === true)
-    t.true(isAcceptableStatus(state.status!))
-  } catch (err: any) {
-    // verifySgx rejected: ensure it is due to our verifyFmspc policy
-    t.regex(String(err?.message ?? ""), /TCB validation failed/i)
-    t.truthy(state.status)
-    // We rejected because of unacceptable status or staleness
-    const unacceptable =
-      !state!.freshnessOk || !isAcceptableStatus(state.status!)
-    t.true(unacceptable)
-  }
-}
-
-test.serial("TCB eval via verifyFmspc: Intel sample quote.dat", async (t) => {
-  await runSgxSample(t, "test/sample/sgx/quote.dat")
-})
 
 test.serial("TCB eval via verifyFmspc: sgx-occlum.dat", async (t) => {
-  await runSgxSample(t, "test/sample/sgx-occlum.dat")
+  await assertTcb(t, "test/sample/sgx-occlum.dat", {
+    _tdx: false,
+    valid: false,
+    status: "SWHardeningNeeded",
+    fresh: false,
+    fmspc: "30606a000000",
+  })
 })
 
 test.serial("TCB eval via verifyFmspc: sgx-chinenyeokafor.dat", async (t) => {
-  await runSgxSample(t, "test/sample/sgx-chinenyeokafor.dat")
+  await assertTcb(t, "test/sample/sgx-chinenyeokafor.dat", {
+    _tdx: false,
+    valid: false,
+    status: "UpToDate",
+    fresh: false,
+    fmspc: "90c06f000000",
+  })
 })
 
 test.serial("TCB eval via verifyFmspc: sgx-tlsn-quote9.dat", async (t) => {
-  await runSgxSample(t, "test/sample/sgx-tlsn-quote9.dat")
+  await assertTcb(t, "test/sample/sgx-tlsn-quote9.dat", {
+    _tdx: false,
+    valid: false,
+    status: "SWHardeningNeeded",
+    fresh: false,
+    fmspc: "00906ed50000",
+  })
 })
 
 test.serial("TCB eval via verifyFmspc: sgx-tlsn-quotedev.dat", async (t) => {
-  await runSgxSample(t, "test/sample/sgx-tlsn-quotedev.dat")
+  await assertTcb(t, "test/sample/sgx-tlsn-quotedev.dat", {
+    _tdx: false,
+    valid: false,
+    status: "SWHardeningNeeded",
+    fresh: false,
+    fmspc: "00906ed50000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v5): trustee", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v5-trustee.dat", {
+    _tdx: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "90c06f000000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): azure", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-azure", {
+    _tdx: true,
+    _b64: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "00806f050000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): edgeless", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-edgeless.dat", {
+    _tdx: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "00806f050000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): gcp", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-gcp.json", {
+    _tdx: true,
+    _json: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "00806f050000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): gcp no nonce", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-gcp-no-nonce.json", {
+    _tdx: true,
+    _json: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "00806f050000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): moemahhouk", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-moemahhouk.dat", {
+    _tdx: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "90c06f000000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): phala", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-phala.dat", {
+    _tdx: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "b0c06f000000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): trustee", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-trustee.dat", {
+    _tdx: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "50806f000000",
+  })
+})
+
+test.serial("TCB eval via verifyFmspc (TDX v4): zkdcap", async (t) => {
+  await assertTcb(t, "test/sample/tdx-v4-zkdcap.dat", {
+    _tdx: true,
+    valid: false,
+    status: "OutOfDate",
+    fresh: false,
+    fmspc: "00806f050000",
+  })
 })
