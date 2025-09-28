@@ -9,6 +9,7 @@ ra-https-qvl is a lightweight, WebCrypto-based SGX/TDX quote verification librar
 - **CRL-based revocation** checks (DER CRL parsing helper included)
 - **QE report signature** and **QE binding** verification
 - **Quote signature** verification (ECDSA P‑256)
+- **TCB check** (match quoted TCBs against Intel TCB Info)
 - Small API surface; zero native dependencies
 
 ## Requirements
@@ -71,6 +72,7 @@ Verification performs:
 - QE report signature verification
 - QE binding check between `attestation_public_key` and QE report data
 - Quote signature verification by `attestation_public_key`
+ - (Optional) TCB evaluation when you provide Intel `tcbInfo.json`
 
 Errors are thrown for invalid conditions (e.g. "invalid root", "invalid cert chain", "expired cert chain, or not yet valid", "revoked certificate in cert chain", "invalid qe report signature", "invalid qe report binding", "invalid signature over quote", "only TDX/SGX is supported", "only ECDSA att_key_type is supported", "only PCK cert_data is supported", "missing certdata", "Unsupported quote version").
 
@@ -105,7 +107,6 @@ Human‑readable JSON views for logging:
 
 ## Limitations
 
-- No TCB checks (for now)
 - Only ECDSA attestation key (P‑256) is supported (for now)
 - Only DCAP `cert_data` type 5 is supported
 - QE report must be present for QE signature/binding checks

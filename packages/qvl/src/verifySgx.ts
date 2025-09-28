@@ -175,7 +175,11 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   const crls = config?.crls
   const { signature, header } = parseSgxQuote(quote)
   const certs = extractPemCertificates(signature.cert_data)
-  let { status, root } = await verifyPCKChain(certs, date ?? +new Date(), crls)
+  let { status, root, fmspc } = await verifyPCKChain(
+    certs,
+    date ?? +new Date(),
+    crls,
+  )
 
   // Use fallback certs, only if certdata is not provided
   if (!root && certs.length === 0) {
@@ -189,6 +193,7 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
     )
     status = fallback.status
     root = fallback.root
+    fmspc = fallback.fmspc
   }
   if (status === "expired") {
     throw new Error("verifySgx: expired cert chain, or not yet valid")
