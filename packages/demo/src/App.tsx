@@ -21,7 +21,7 @@ import {
 
 export const baseUrl =
   document.location.hostname === "localhost"
-    ? "http://localhost:3001"
+    ? "https://ra-https.canvas.xyz"
     : document.location.hostname === "ra-https.vercel.app"
       ? "https://ra-https.canvas.xyz"
       : `${document.location.protocol}//${document.location.hostname}`
@@ -133,14 +133,20 @@ function App() {
       console.log("Connected to chat server")
 
       // Set up control panel UI with attested measurements, expected measurements, etc.
-      if (!enc.quote) throw new Error("unexpected: ws shouldn't open without a quote")
-      if (!isTdxQuote(enc.quote)) throw new Error("unexpected: should be a tdx quote")
+      if (!enc.quote)
+        throw new Error("unexpected: ws shouldn't open without a quote")
+      if (!isTdxQuote(enc.quote))
+        throw new Error("unexpected: should be a tdx quote")
       setAttestedMrtd(hex(enc.quote.body.mr_td))
       setAttestedReportData(hex(enc.quote.body.report_data))
       enc.getExpectedReportData().then((expectedReportData: Uint8Array) => {
         setExpectedReportData(hex(expectedReportData ?? new Uint8Array()))
-        setVerifierNonce(hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()))
-        setVerifierNonceIat(hex(enc.reportBindingData?.verifierData?.iat ?? new Uint8Array()))
+        setVerifierNonce(
+          hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()),
+        )
+        setVerifierNonceIat(
+          hex(enc.reportBindingData?.verifierData?.iat ?? new Uint8Array()),
+        )
       })
 
       setTimeout(() => {
@@ -464,30 +470,41 @@ function App() {
             {verifyResult && (
               <div style={{ marginBottom: 6 }}>{verifyResult}</div>
             )}
-            <div style={{ marginBottom: 6 }}>Server: {baseUrl}</div>
+            <div style={{ marginBottom: 6 }}>Endpoint: {baseUrl}</div>
             <div style={{ marginBottom: 6 }}>MRTD: {attestedMrtd}</div>
-            <div style={{ marginBottom: 6 }}>report_data: {attestedReportData}</div>
+            <div style={{ marginBottom: 6 }}>
+              report_data: {attestedReportData}
+            </div>
 
-            <hr style={{ margin: "12px 0", border: "none", borderBottom: "1px solid #ccc" }}/>
-            <div style={{ marginBottom: 6 }}>
-              X25519 tunnel key:{" "}
-              {enc?.serverX25519PublicKey
-                ? hex(enc.serverX25519PublicKey)
-                : "--"}
-            </div>
-            <div style={{ marginBottom: 6 }}>
-              Nonce:{" "}
-              {verifierNonce}
-            </div>
-            <div style={{ marginBottom: 6 }}>
-              Nonce issued at:{" "}
-              {verifierNonceIat}
-            </div>
-            <div style={{ marginBottom: 6 }}>
-              Expected report_data:{" "}
-              <span style={{ color: expectedReportData === attestedReportData ? 'green' : 'red' }}>
-                {expectedReportData || 'None'}
+            <hr
+              style={{
+                margin: "12px 0",
+                border: "none",
+                borderBottom: "1px solid #ccc",
+              }}
+            />
+            <div style={{ marginBottom: 10 }}>
+              Expected report_data = sha512(nonce, iat, key):{" "}
+              <span
+                style={{
+                  color:
+                    expectedReportData === attestedReportData ? "green" : "red",
+                }}
+              >
+                {expectedReportData || "None"}
               </span>
+            </div>
+            <div style={{ borderLeft: "1px solid #ccc", paddingLeft: 12 }}>
+              <div style={{ marginBottom: 6 }}>
+                X25519 tunnel key:{" "}
+                {enc?.serverX25519PublicKey
+                  ? hex(enc.serverX25519PublicKey)
+                  : "--"}
+              </div>
+              <div style={{ marginBottom: 6 }}>Nonce: {verifierNonce}</div>
+              <div style={{ marginBottom: 6 }}>
+                Nonce issued at: {verifierNonceIat}
+              </div>
             </div>
           </div>
         </div>
