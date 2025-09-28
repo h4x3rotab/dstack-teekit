@@ -3,11 +3,11 @@
 This repository implements RA-HTTPS and RA-WSS, a set of protocols for
 connecting to Secure Enclaves and Trusted Execution Environments.
 
-Conventionally, browsers have no way of verifying they are connected
-to a TEE, because they don't expose certificate information that a web
-page can use to prove a connection terminates inside the enclave. This
-breaks the security and privacy of TEEs, since SSL proxies (like
-Cloudflare) can trivially see and modify traffic to the TEE.
+By default, browsers have no way of verifying they are connected to a
+TEE, because they don't expose certificate information to the web page
+that can use to prove a connection terminates inside the enclave. This
+breaks the security and privacy, since SSL proxies (like Cloudflare)
+can trivially see and modify traffic to the TEE.
 
 This package includes a built-in secure channel that authenticates the
 TEE and ensures it's running up-to-date hardware, entirely from in the
@@ -157,7 +157,7 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
 
 - For security reasons, we currently require that all WebSocket connections to the HTTP server go through the encrypted channel.
 - Client WebSocket targets must use the same port as the tunnel `origin`.
-- One keypair is generated per server process; there’s no session resumption across processes. No support for load balancing (yet).
+- One keypair is generated per server process. No key rotation (yet) or support for load balancing across TEEs.
 - HTTP request bodies supported: string, `Uint8Array`, `ArrayBuffer`, and `ReadableStream`.
 - HTTP request/response bodies are buffered end-to-end; very large payloads cannot be streamed.
 - The default client request timeout is 30s and not configurable.
