@@ -97,6 +97,7 @@ async function startTunnelFetchApp() {
   const tunnelClient = await TunnelClient.initialize(origin, {
     mrtd: hex(quoteBodyParsed.mr_td),
     report_data: hex(quoteBodyParsed.report_data),
+    customVerifyX25519Binding: () => true,
   })
 
   return { tunnelServer, tunnelClient, origin }

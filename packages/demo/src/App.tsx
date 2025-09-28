@@ -29,9 +29,10 @@ export const baseUrl =
 const UPTIME_REFRESH_MS = 10000
 
 const enc = await TunnelClient.initialize(baseUrl, {
-  // Don't actually validate anything
+  // Don't actually validate anything, since we often use this app with sample quotes.
+  // Validation status is shown in the frontend instead.
   customVerifyQuote: async () => true,
-  customVerifyReportData: async () => true,
+  customVerifyX25519Binding: async () => true,
 })
 
 const buttonStyle = {
@@ -139,7 +140,7 @@ function App() {
         throw new Error("unexpected: should be a tdx quote")
       setAttestedMrtd(hex(enc.quote.body.mr_td))
       setAttestedReportData(hex(enc.quote.body.report_data))
-      enc.getExpectedReportData().then((expectedReportData: Uint8Array) => {
+      enc.getX25519ExpectedReportData().then((expectedReportData: Uint8Array) => {
         setExpectedReportData(hex(expectedReportData ?? new Uint8Array()))
         setVerifierNonce(
           hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()),

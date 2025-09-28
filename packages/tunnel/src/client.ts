@@ -38,7 +38,9 @@ export type TunnelClientConfig = {
   mrtd?: string
   report_data?: string
   customVerifyQuote?: (quote: TdxQuote | SgxQuote) => boolean | Promise<boolean>
-  customVerifyReportData?: (client: TunnelClient) => boolean | Promise<boolean>
+  customVerifyX25519Binding?: (
+    client: TunnelClient,
+  ) => boolean | Promise<boolean>
   sgx?: boolean // default to TDX
 }
 
@@ -290,8 +292,8 @@ export class TunnelClient {
             throw new Error("Error opening channel: invalid report_data")
           }
 
-          // Validate report_data binding, using default and custom validators
-          if (this.config.customVerifyReportData === undefined) {
+          // Validate report_data to X25519 key binding, using default and custom validators
+          if (this.config.customVerifyX25519Binding === undefined) {
             const val = this.reportBindingData?.verifierData?.val
             const iat = this.reportBindingData?.verifierData?.iat
             if (val === undefined) {
@@ -299,13 +301,13 @@ export class TunnelClient {
             } else if (iat === undefined) {
               throw new Error("missing iat, could not validate report_data")
             }
-            if (!(await this.isQuotedReportBound(validQuote))) {
+            if (!(await this.isX25519Bound(validQuote))) {
               throw new Error(
                 "Error opening channel: report_data did not equal sha512(nonce || iat || x25519key)",
               )
             }
           } else {
-            if ((await this.config.customVerifyReportData(this)) !== true) {
+            if ((await this.config.customVerifyX25519Binding(this)) !== true) {
               throw new Error(
                 "Error opening channel: custom report_data validation failed",
               )
@@ -629,7 +631,11 @@ export class TunnelClient {
     }
   }
 
-  async getExpectedReportData(): Promise<Uint8Array> {
+  /**
+   * Get the `report_data` expected based on the current X25519 key,
+   * and the verifier nonce/iat obtained during the last remote attestation request.
+   */
+  async getX25519ExpectedReportData(): Promise<Uint8Array> {
     const nonce = this.reportBindingData?.verifierData?.val
     const issuedAt = this.reportBindingData?.verifierData?.iat
     if (!nonce) throw new Error("missing verifier_nonce.val")
@@ -643,13 +649,13 @@ export class TunnelClient {
   }
 
   /**
-   * Check whether a TDX quote attests to this tunnel's counterparty X25519 key.
+   * Check whether a TDX quote attests to this tunnel's connected server's X25519 key.
    * This should be used in conjunction with MRTD verification and TCB/CRL checks
    * to verify that we have a secure connection.
    */
-  async isQuotedReportBound(quote: TdxQuote | SgxQuote): Promise<boolean> {
+  async isX25519Bound(quote: TdxQuote | SgxQuote): Promise<boolean> {
     const actualReport = quote.body.report_data
-    const expectedReport = await this.getExpectedReportData()
+    const expectedReport = await this.getX25519ExpectedReportData()
     return areUint8ArraysEqual(actualReport, expectedReport)
   }
 }
