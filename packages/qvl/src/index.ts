@@ -1,8 +1,11 @@
 export * from "./formatters.js"
 export * from "./structs.js"
 export * from "./x509.js"
-export * from "./utils.js"
-export { getExpectedReportDataFromUserdata, isUserdataBound } from "./utils.js"
+export {
+  hex,
+  getExpectedReportDataFromUserdata,
+  isUserdataBound,
+} from "./utils.js"
 
 export * from "./verifyTdx.js"
 export * from "./verifySgx.js"

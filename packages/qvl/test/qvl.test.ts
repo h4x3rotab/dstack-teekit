@@ -6,14 +6,16 @@ import {
   parseTdxQuote,
   parseTdxQuoteBase64,
   hex,
-  reverseHexBytes,
-  extractPemCertificates,
   verifyTdx,
   verifyTdxBase64,
   getTdx10SignedRegion,
-  normalizeSerialHex,
   QV_X509Certificate,
 } from "ra-https-qvl"
+import {
+  extractPemCertificates,
+  reverseHexBytes,
+  normalizeSerialHex,
+} from "ra-https-qvl/utils"
 import {
   tamperPemSignature,
   buildCRL,

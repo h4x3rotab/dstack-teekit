@@ -5,6 +5,16 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./utils": {
+      "types": "./lib/utils.d.ts",
+      "import": "./lib/utils.js"
+    }
+  },
   "scripts": {
     "dev": "tsc --watch -p tsconfig.json",
     "build": "tsc -p tsconfig.json",

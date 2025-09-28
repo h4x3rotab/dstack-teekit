@@ -24,7 +24,7 @@ function pemToDerBytes(pem: string): Uint8Array {
   return scureBase64.decode(b64)
 }
 
-function nameToComparableString(name: RelativeDistinguishedNames): string {
+function nameToX509ComparableString(name: RelativeDistinguishedNames): string {
   try {
     const parts = name.typesAndValues.map((atv) => {
       const oid = atv.type
@@ -53,11 +53,11 @@ export class QV_X509Certificate {
   }
 
   get subject(): string {
-    return nameToComparableString(this._cert.subject)
+    return nameToX509ComparableString(this._cert.subject)
   }
 
   get issuer(): string {
-    return nameToComparableString(this._cert.issuer)
+    return nameToX509ComparableString(this._cert.issuer)
   }
 
   get serialNumber(): string {

@@ -4,11 +4,13 @@ import {
   getTdx15SignedRegion,
   parseTdxQuote,
   parseSgxQuote,
-  extractPemCertificates,
   verifyPCKChain,
-  computeCertSha256Hex,
   QV_X509Certificate,
 } from "ra-https-qvl"
+import {
+  extractPemCertificates,
+  computeCertSha256Hex,
+} from "ra-https-qvl/utils"
 
 export function pemToDer(pem: string): Buffer {
   const b64 = pem

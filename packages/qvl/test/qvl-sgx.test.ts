@@ -5,10 +5,9 @@ import {
   hex,
   verifySgx,
   parseSgxQuote,
-  extractPemCertificates,
   getSgxSignedRegion,
-  normalizeSerialHex,
 } from "ra-https-qvl"
+import { normalizeSerialHex, extractPemCertificates } from "ra-https-qvl/utils"
 import {
   rebuildSgxQuoteWithCertData,
   tamperPemSignature,
