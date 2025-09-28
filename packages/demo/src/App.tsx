@@ -470,10 +470,10 @@ function App() {
             {verifyResult && (
               <div style={{ marginBottom: 6 }}>{verifyResult}</div>
             )}
-            <div style={{ marginBottom: 6 }}>Endpoint: {baseUrl}</div>
-            <div style={{ marginBottom: 6 }}>MRTD: {attestedMrtd}</div>
+            <div style={{ marginBottom: 6 }}>Server: {baseUrl}</div>
+            <div style={{ marginBottom: 6 }}>Attested MRTD: {attestedMrtd}</div>
             <div style={{ marginBottom: 6 }}>
-              report_data: {attestedReportData}
+              Attested report_data: {attestedReportData}
             </div>
 
             <hr
@@ -484,7 +484,7 @@ function App() {
               }}
             />
             <div style={{ marginBottom: 10 }}>
-              Expected report_data = sha512(nonce, iat, key):{" "}
+              Expected report_data:{" "}
               <span
                 style={{
                   color:
@@ -496,16 +496,20 @@ function App() {
             </div>
             <div style={{ borderLeft: "1px solid #ccc", paddingLeft: 12 }}>
               <div style={{ marginBottom: 6 }}>
-                X25519 tunnel key:{" "}
-                {enc?.serverX25519PublicKey
-                  ? hex(enc.serverX25519PublicKey)
-                  : "--"}
+                Based on sha512(nonce, iat, key):
               </div>
               <div style={{ marginBottom: 6 }}>Nonce: {verifierNonce}</div>
               <div style={{ marginBottom: 6 }}>
                 Nonce issued at: {verifierNonceIat}
               </div>
+              <div style={{ marginBottom: 6 }}>
+                X25519 tunnel key:{" "}
+                {enc?.serverX25519PublicKey
+                  ? hex(enc.serverX25519PublicKey)
+                  : "--"}
+              </div>
             </div>
+            <br />
           </div>
         </div>
       </div>
