@@ -6,13 +6,13 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.js"
-    },
+    "types": "./lib/index.d.ts",
+    "import": "./lib/index.js",
+    "default": "./lib/index.js",
     "./utils": {
       "types": "./lib/utils.d.ts",
-      "import": "./lib/utils.js"
+      "import": "./lib/utils.js",
+      "default": "./lib/utils.js"
     }
   },
   "scripts": {
