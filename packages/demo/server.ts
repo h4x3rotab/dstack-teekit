@@ -83,17 +83,16 @@ let counter = 0
 // API Routes
 app.get("/uptime", encryptedOnly(), (_req, res) => {
   const uptimeMs = Date.now() - startTime
-  const uptimeSeconds = (Math.floor(uptimeMs) / 1000) % 60
-  const uptimeMinutes = Math.floor(uptimeSeconds / 60) % 60
+  const uptimeSeconds = Math.floor(uptimeMs) / 1000
+  const uptimeMinutes = Math.floor(uptimeSeconds / 60)
   const uptimeHours = Math.floor(uptimeMinutes / 60)
 
-  const seconds = uptimeSeconds.toString().slice(0, 4)
+  const minutes = (uptimeMinutes % 60).toString()
+  const seconds = (uptimeSeconds % 60).toString().slice(0, 4)
 
   res.json({
     uptime: {
-      formatted: `${uptimeHours ? uptimeHours + "h" : ""} ${
-        uptimeMinutes ? uptimeMinutes + "m" : ""
-      } ${seconds}s`,
+      formatted: `${uptimeHours ? uptimeHours + "h" : ""} ${minutes}m ${seconds}s`,
     },
   })
 })
