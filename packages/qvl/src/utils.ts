@@ -1,6 +1,8 @@
 import { QV_X509Certificate } from "./x509.js"
 import { base64url as scureBase64Url, hex as scureHex } from "@scure/base"
 import { concatUint8Arrays, areUint8ArraysEqual } from "uint8array-extras"
+import { SgxQuote } from "./verifySgx.js"
+import { TdxQuote } from "./verifyTdx.js"
 
 export const hex = (b: Uint8Array) => scureHex.encode(b)
 
@@ -184,4 +186,39 @@ export function concatBytes(chunks: Uint8Array[]): Uint8Array {
 
 export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return areUint8ArraysEqual(a, b)
+}
+
+/** Compute expected report_data from sha512(nonce || iat || userdata),
+ * as implemented by the Intel trustauthority-cli. */
+export async function getExpectedReportDataFromUserdata(
+  nonce: Uint8Array,
+  issuedAt: Uint8Array,
+  x25519PublicKey: Uint8Array,
+): Promise<Uint8Array> {
+  // TODO: Handle Azure quote binding
+  if (!nonce || nonce.length === 0)
+    throw new Error("missing verifier_nonce.val")
+  if (!issuedAt || issuedAt.length === 0)
+    throw new Error("missing verifier_nonce.iat")
+  if (!x25519PublicKey || x25519PublicKey.length === 0)
+    throw new Error("missing userdata")
+
+  const buf = concatUint8Arrays([nonce, issuedAt, x25519PublicKey])
+  const expectedReport = await crypto.subtle.digest("SHA-512", buf)
+  return new Uint8Array(expectedReport)
+}
+
+/** Check if quote.body.report_data equals sha512(nonce || iat || userdata) */
+export async function isUserdataBound(
+  quote: TdxQuote | SgxQuote,
+  nonce: Uint8Array,
+  issuedAt: Uint8Array,
+  x25519PublicKey: Uint8Array,
+): Promise<boolean> {
+  const expected = await getExpectedReportDataFromUserdata(
+    nonce,
+    issuedAt,
+    x25519PublicKey,
+  )
+  return bytesEqual(quote.body.report_data, expected)
 }

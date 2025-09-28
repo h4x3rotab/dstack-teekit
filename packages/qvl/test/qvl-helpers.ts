@@ -71,6 +71,23 @@ export function buildCRL(serialsUpperHex: string[]): Buffer {
   return outer
 }
 
+export function decodeGcpSample() {
+  const fs = require("node:fs") as typeof import("node:fs")
+  const base64 = require("@scure/base")
+    .base64 as typeof import("@scure/base").base64
+  const data = JSON.parse(
+    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+  )
+  const quoteB64: string = data.tdx.quote
+  const nonceB64: string = data.tdx.verifier_nonce.val
+  const iatB64: string = data.tdx.verifier_nonce.iat
+  return {
+    quote: Buffer.from(quoteB64, "base64"),
+    nonce: base64.decode(nonceB64),
+    iat: base64.decode(iatB64),
+  }
+}
+
 export function rebuildTdxQuoteWithCertData(
   baseQuote: Buffer,
   certData: Buffer,

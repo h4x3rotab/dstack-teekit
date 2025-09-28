@@ -9,7 +9,11 @@ import {
   verifyTdx,
 } from "ra-https-qvl"
 import { base64 as scureBase64 } from "@scure/base"
-import { concatUint8Arrays, areUint8ArraysEqual } from "uint8array-extras"
+// no extra utils needed here
+import {
+  getExpectedReportDataFromUserdata,
+  isUserdataBound,
+} from "ra-https-qvl"
 import { encode as encodeCbor, decode as decodeCbor } from "cbor-x"
 import createDebug from "debug"
 
@@ -638,14 +642,12 @@ export class TunnelClient {
   async getX25519ExpectedReportData(): Promise<Uint8Array> {
     const nonce = this.reportBindingData?.verifierData?.val
     const issuedAt = this.reportBindingData?.verifierData?.iat
+    const x25519key = this.serverX25519PublicKey
     if (!nonce) throw new Error("missing verifier_nonce.val")
     if (!issuedAt) throw new Error("missing verifier_nonce.iat")
-    if (!this.serverX25519PublicKey) throw new Error("missing x25519 key")
+    if (!x25519key) throw new Error("missing x25519 key")
 
-    const userdata = this.serverX25519PublicKey
-    const buf = concatUint8Arrays([nonce, issuedAt, userdata])
-    const expectedReport = await crypto.subtle.digest("SHA-512", buf)
-    return new Uint8Array(expectedReport)
+    return await getExpectedReportDataFromUserdata(nonce, issuedAt, x25519key)
   }
 
   /**
@@ -654,8 +656,13 @@ export class TunnelClient {
    * to verify that we have a secure connection.
    */
   async isX25519Bound(quote: TdxQuote | SgxQuote): Promise<boolean> {
-    const actualReport = quote.body.report_data
-    const expectedReport = await this.getX25519ExpectedReportData()
-    return areUint8ArraysEqual(actualReport, expectedReport)
+    const nonce = this.reportBindingData?.verifierData?.val
+    const issuedAt = this.reportBindingData?.verifierData?.iat
+    const x25519key = this.serverX25519PublicKey
+    if (!nonce) throw new Error("missing verifier_nonce.val")
+    if (!issuedAt) throw new Error("missing verifier_nonce.iat")
+    if (!x25519key) throw new Error("missing x25519 key")
+
+    return await isUserdataBound(quote, nonce, issuedAt, x25519key)
   }
 }
