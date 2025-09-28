@@ -342,13 +342,7 @@ export async function verifyTdxQuoteSignature(
   )
 }
 
-/**
- * Verify a complete chain of trust for a TDX enclave, including the
- * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
- *
- * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
- */
-export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
+export async function _verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
   if (
     config !== undefined &&
     (typeof config !== "object" || Array.isArray(config))
@@ -387,6 +381,37 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
     root = fallback.root
     fmspc = fallback.fmspc
   }
+
+  return {
+    status,
+    root,
+    fmspc,
+    signature,
+    header,
+    extraCertdata,
+    parsedQuote,
+    pinnedRootCerts,
+  }
+}
+
+/**
+ * Verify a complete chain of trust for a TDX environment, including the
+ * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
+ *
+ * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
+ */
+export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
+  const {
+    status,
+    root,
+    fmspc,
+    signature,
+    header,
+    extraCertdata,
+    parsedQuote,
+    pinnedRootCerts,
+  } = await _verifyTdx(quote, config)
+
   if (status === "expired") {
     throw new Error("verifyTdx: expired cert chain, or not yet valid")
   }

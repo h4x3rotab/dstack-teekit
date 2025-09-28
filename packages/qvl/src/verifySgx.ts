@@ -162,7 +162,7 @@ export async function verifySgxQuoteSignature(
   )
 }
 
-export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
+export async function _verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   if (
     config !== undefined &&
     (typeof config !== "object" || Array.isArray(config))
@@ -197,6 +197,37 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
     root = fallback.root
     fmspc = fallback.fmspc
   }
+
+  return {
+    status,
+    root,
+    fmspc,
+    signature,
+    header,
+    extraCertdata,
+    parsedQuote,
+    pinnedRootCerts,
+  }
+}
+
+/**
+ * Verify a complete chain of trust for an SGX enclave, including the
+ * Intel SGX Root CA, PCK certificate chain, and QE signature and binding.
+ *
+ * Optional: accepts `extraCertdata`, which is used if `quote` is missing certdata.
+ */
+export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
+  const {
+    status,
+    root,
+    fmspc,
+    signature,
+    header,
+    extraCertdata,
+    parsedQuote,
+    pinnedRootCerts,
+  } = await _verifySgx(quote, config)
+
   if (status === "expired") {
     throw new Error("verifySgx: expired cert chain, or not yet valid")
   }

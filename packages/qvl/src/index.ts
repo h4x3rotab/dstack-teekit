@@ -1,12 +1,12 @@
 export * from "./formatters.js"
 export * from "./structs.js"
+export { QV_X509Certificate, BasicConstraintsExtension } from "./x509.js"
 export {
   parseSgxQuote,
   parseSgxQuoteBase64,
   parseTdxQuote,
   parseTdxQuoteBase64,
 } from "./parse.js"
-export * from "./x509.js"
 export {
   hex,
   getExpectedReportDataFromUserdata,
