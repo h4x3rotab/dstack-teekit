@@ -271,8 +271,8 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
     throw new Error("verifySgx: invalid signature over quote")
   }
 
-  if (config?.verifyFmspc !== undefined) {
-    if (fmspc === null || !(await config.verifyFmspc(fmspc, parsedQuote))) {
+  if (config?.verifyTcb !== undefined) {
+    if (fmspc === null || !(await config.verifyTcb(fmspc, parsedQuote))) {
       throw new Error("verifySgx: TCB validation failed")
     }
   }

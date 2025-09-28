@@ -9,6 +9,7 @@ import {
   toBase64Url,
   concatBytes,
   bytesEqual,
+  type Awaitable,
 } from "./utils.js"
 import { intelSgxRootCaPem } from "./rootCa.js"
 import { base64 as scureBase64 } from "@scure/base"
@@ -16,13 +17,10 @@ import { SgxQuote } from "./verifySgx.js"
 
 export interface VerifyConfig {
   crls: Uint8Array[]
+  verifyTcb: (fmspc: string, quote: TdxQuote | SgxQuote) => Awaitable<boolean>
   pinnedRootCerts?: QV_X509Certificate[]
   date?: number
   extraCertdata?: string[]
-  verifyFmspc?: (
-    fmspcHex: string,
-    quote: TdxQuote | SgxQuote,
-  ) => Promise<boolean>
 }
 
 export const DEFAULT_PINNED_ROOT_CERTS: QV_X509Certificate[] = [
@@ -408,7 +406,6 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
     signature,
     header,
     extraCertdata,
-    parsedQuote,
     pinnedRootCerts,
   } = await _verifyTdx(quote, config)
 
@@ -454,12 +451,9 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
     throw new Error("verifyTdx: invalid signature over quote")
   }
 
-  if (config?.verifyFmspc !== undefined) {
-    if (fmspc === null || !(await config.verifyFmspc(fmspc, parsedQuote))) {
-      throw new Error("verifyTdx: TCB validation failed")
-    }
+  if (fmspc === null) {
+    throw new Error("verifyTdx: TCB missing fmspc")
   }
-
   return true
 }
 

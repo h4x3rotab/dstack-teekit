@@ -4,6 +4,8 @@ import { concatUint8Arrays, areUint8ArraysEqual } from "uint8array-extras"
 import { SgxQuote } from "./verifySgx.js"
 import { TdxQuote } from "./verifyTdx.js"
 
+export type Awaitable<T> = T | Promise<T>
+
 export const hex = (b: Uint8Array) => scureHex.encode(b)
 
 export const reverseHexBytes = (h: string) => {

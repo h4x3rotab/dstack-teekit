@@ -140,15 +140,17 @@ function App() {
         throw new Error("unexpected: should be a tdx quote")
       setAttestedMrtd(hex(enc.quote.body.mr_td))
       setAttestedReportData(hex(enc.quote.body.report_data))
-      enc.getX25519ExpectedReportData().then((expectedReportData: Uint8Array) => {
-        setExpectedReportData(hex(expectedReportData ?? new Uint8Array()))
-        setVerifierNonce(
-          hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()),
-        )
-        setVerifierNonceIat(
-          hex(enc.reportBindingData?.verifierData?.iat ?? new Uint8Array()),
-        )
-      })
+      enc
+        .getX25519ExpectedReportData()
+        .then((expectedReportData: Uint8Array) => {
+          setExpectedReportData(hex(expectedReportData ?? new Uint8Array()))
+          setVerifierNonce(
+            hex(enc.reportBindingData?.verifierData?.val ?? new Uint8Array()),
+          )
+          setVerifierNonceIat(
+            hex(enc.reportBindingData?.verifierData?.iat ?? new Uint8Array()),
+          )
+        })
 
       setTimeout(() => {
         inputRef.current?.focus()
@@ -221,16 +223,19 @@ function App() {
       const ok = await verifyTdxBase64(tappdV4Base64, {
         date: Date.parse("2025-09-01"),
         crls: [],
+        verifyTcb: () => true,
       })
 
       const ok2 = await verifyTdxBase64(trusteeV5Base64, {
         date: Date.parse("2025-09-01"),
         crls: [],
+        verifyTcb: () => true,
       })
 
       const ok3 = await verifySgxBase64(occlumSgxBase64, {
         date: Date.parse("2025-09-01"),
         crls: [],
+        verifyTcb: () => true,
       })
 
       if (ok && ok2 && ok3) {

@@ -47,7 +47,13 @@ test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "b0c06f000000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
@@ -70,7 +76,13 @@ test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "00806f050000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
@@ -93,7 +105,13 @@ test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "b0c06f000000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
@@ -117,7 +135,13 @@ test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "b0c06f000000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
@@ -142,7 +166,13 @@ test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "90c06f000000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from Azure", async (t) => {
@@ -164,7 +194,13 @@ test.serial("Verify a V4 TDX quote from Azure", async (t) => {
   t.deepEqual(body.mr_owner_config, new Uint8Array(48))
   t.is(fmspc, "00806f050000")
 
-  t.true(await verifyTdxBase64(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdxBase64(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
@@ -186,7 +222,13 @@ test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "50806f000000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from ZKDCAP", async (t) => {
@@ -208,7 +250,13 @@ test.serial("Verify a V4 TDX quote from ZKDCAP", async (t) => {
   t.deepEqual(body.mr_owner_config, Buffer.alloc(48))
   t.is(fmspc, "00806f050000")
 
-  t.true(await verifyTdx(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdx(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 test.serial("Verify a V4 TDX quote from Intel", async (t) => {
@@ -246,7 +294,11 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
     fs.readFileSync("test/sample/tdx/intermediateCaCrl.der"),
   ]
 
-  const { fmspc } = await _verifyTdx(quote, { extraCertdata: certdata, crls })
+  const { fmspc } = await _verifyTdx(quote, {
+    extraCertdata: certdata,
+    crls,
+    verifyTcb: () => true,
+  })
   t.is(fmspc, "ed742af8adf5")
 
   t.true(
@@ -255,6 +307,7 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
       date: BASE_TIME,
       extraCertdata: certdata,
       crls,
+      verifyTcb: () => true,
     }),
   )
 })
@@ -281,7 +334,13 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   t.deepEqual(body.mr_owner_config, new Uint8Array(48))
   t.is(fmspc, "00806f050000")
 
-  t.true(await verifyTdxBase64(quote, { date: BASE_TIME, crls: [] }))
+  t.true(
+    await verifyTdxBase64(quote, {
+      date: BASE_TIME,
+      crls: [],
+      verifyTcb: () => true,
+    }),
+  )
 })
 
 // Negative tests based on the GCP quote
@@ -301,6 +360,7 @@ test.serial("Reject a V4 TDX quote, missing root cert", async (t) => {
         pinnedRootCerts: [],
         date: BASE_TIME,
         crls: [],
+        verifyTcb: () => true,
       }),
   )
   t.truthy(err)
@@ -321,6 +381,7 @@ test.serial("Reject a V4 TDX quote, missing intermediate cert", async (t) => {
         date: BASE_TIME,
         extraCertdata: [leaf, root],
         crls: [],
+        verifyTcb: () => true,
       }),
   )
   t.truthy(err)
@@ -341,6 +402,7 @@ test.serial("Reject a V4 TDX quote, missing leaf cert", async (t) => {
         date: BASE_TIME,
         extraCertdata: [intermediate, root],
         crls: [],
+        verifyTcb: () => true,
       }),
   )
   t.truthy(err)
@@ -359,7 +421,11 @@ test.serial("Reject a V4 TDX quote, revoked root cert", async (t) => {
   const crl = buildCRL([rootSerial])
   const err = await t.throwsAsync(
     async () =>
-      await verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
+      await verifyTdxBase64(quoteB64, {
+        date: BASE_TIME,
+        crls: [crl],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /revoked certificate in cert chain/i)
@@ -377,7 +443,11 @@ test.serial("Reject a V4 TDX quote, revoked intermediate cert", async (t) => {
   const crl = buildCRL([serial])
   const err = await t.throwsAsync(
     async () =>
-      await verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
+      await verifyTdxBase64(quoteB64, {
+        date: BASE_TIME,
+        crls: [crl],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /revoked certificate in cert chain/i)
@@ -393,7 +463,11 @@ test.serial("Reject a V4 TDX quote, revoked leaf cert", async (t) => {
   const crl = buildCRL([serial])
   const err = await t.throwsAsync(
     async () =>
-      await verifyTdxBase64(quoteB64, { date: BASE_TIME, crls: [crl] }),
+      await verifyTdxBase64(quoteB64, {
+        date: BASE_TIME,
+        crls: [crl],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /revoked certificate in cert chain/i)
@@ -414,6 +488,7 @@ test.serial("Reject a V4 TDX quote, invalid root self-signature", async (t) => {
         date: BASE_TIME,
         extraCertdata: [leaf, intermediate, tamperedRoot],
         crls: [],
+        verifyTcb: () => true,
       }),
   )
   t.truthy(err)
@@ -437,6 +512,7 @@ test.serial(
           date: BASE_TIME,
           extraCertdata: [leaf, tamperedIntermediate, root],
           crls: [],
+          verifyTcb: () => true,
         }),
     )
     t.truthy(err)
@@ -459,6 +535,7 @@ test.serial("Reject a V4 TDX quote, invalid leaf cert signature", async (t) => {
         date: BASE_TIME,
         extraCertdata: [tamperedLeaf, intermediate, root],
         crls: [],
+        verifyTcb: () => true,
       }),
   )
   t.truthy(err)
@@ -487,7 +564,12 @@ test.serial("Reject a V4 TDX quote, incorrect QE signature", async (t) => {
     sigData,
   ])
   const err = await t.throwsAsync(
-    async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+    async () =>
+      await verifyTdx(mutated, {
+        date: BASE_TIME,
+        crls: [],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /invalid qe report signature/i)
@@ -515,7 +597,12 @@ test.serial("Reject a V4 TDX quote, incorrect QE binding", async (t) => {
     sigData,
   ])
   const err = await t.throwsAsync(
-    async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+    async () =>
+      await verifyTdx(mutated, {
+        date: BASE_TIME,
+        crls: [],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /invalid qe report binding/i)
@@ -543,7 +630,12 @@ test.serial("Reject a V4 TDX quote, incorrect TD signature", async (t) => {
     sigData,
   ])
   const err = await t.throwsAsync(
-    async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+    async () =>
+      await verifyTdx(mutated, {
+        date: BASE_TIME,
+        crls: [],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /invalid signature over quote/i)
@@ -556,7 +648,12 @@ test.serial(
     const base = Buffer.from(quoteB64, "base64")
     const noEmbedded = rebuildTdxQuoteWithCertData(base, Buffer.alloc(0))
     const err = await t.throwsAsync(
-      async () => await verifyTdx(noEmbedded, { date: BASE_TIME, crls: [] }),
+      async () =>
+        await verifyTdx(noEmbedded, {
+          date: BASE_TIME,
+          crls: [],
+          verifyTcb: () => true,
+        }),
     )
     t.truthy(err)
     t.regex(err!.message, /missing certdata/i)
@@ -568,7 +665,12 @@ test.serial(
   async (t) => {
     const quoteB64 = getGcpQuoteBase64()
     const err = await t.throwsAsync(
-      async () => await verifyTdxBase64(quoteB64, { date: 0, crls: [] }),
+      async () =>
+        await verifyTdxBase64(quoteB64, {
+          date: 0,
+          crls: [],
+          verifyTcb: () => true,
+        }),
     )
     t.truthy(err)
     t.regex(err!.message, /expired cert chain/i)
@@ -582,7 +684,12 @@ test.serial("Reject a V4 TDX quote, unsupported TEE type", async (t) => {
   // header.tee_type at offset 4 (UInt32LE)
   mutated.writeUInt32LE(0, 4)
   const err = await t.throwsAsync(
-    async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+    async () =>
+      await verifyTdx(mutated, {
+        date: BASE_TIME,
+        crls: [],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /only tdx is supported/i)
@@ -597,7 +704,12 @@ test.serial(
     // header.att_key_type at offset 2 (UInt16LE)
     mutated.writeUInt16LE(1, 2)
     const err = await t.throwsAsync(
-      async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+      async () =>
+        await verifyTdx(mutated, {
+          date: BASE_TIME,
+          crls: [],
+          verifyTcb: () => true,
+        }),
     )
     t.truthy(err)
     t.regex(err!.message, /only ECDSA att_key_type is supported/i)
@@ -632,7 +744,12 @@ test.serial("Reject a V4 TDX quote, unsupported cert_data_type", async (t) => {
   ])
 
   const err = await t.throwsAsync(
-    async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+    async () =>
+      await verifyTdx(mutated, {
+        date: BASE_TIME,
+        crls: [],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /only PCK cert_data is supported/i)
@@ -644,7 +761,12 @@ test.serial(
     const quoteB64 = getGcpQuoteBase64()
     const early = Date.parse("2000-01-01")
     const err = await t.throwsAsync(
-      async () => await verifyTdxBase64(quoteB64, { date: early, crls: [] }),
+      async () =>
+        await verifyTdxBase64(quoteB64, {
+          date: early,
+          crls: [],
+          verifyTcb: () => true,
+        }),
     )
     t.truthy(err)
     t.regex(err!.message, /expired cert chain, or not yet valid/i)
@@ -657,7 +779,12 @@ test.serial(
     const quoteB64 = getGcpQuoteBase64()
     const late = Date.parse("2100-01-01")
     const err = await t.throwsAsync(
-      async () => await verifyTdxBase64(quoteB64, { date: late, crls: [] }),
+      async () =>
+        await verifyTdxBase64(quoteB64, {
+          date: late,
+          crls: [],
+          verifyTcb: () => true,
+        }),
     )
     t.truthy(err)
     t.regex(err!.message, /expired cert chain, or not yet valid/i)
@@ -671,7 +798,12 @@ test.serial("Reject a TDX quote with unsupported version", async (t) => {
   // header.version at offset 0 (UInt16LE)
   mutated.writeUInt16LE(6, 0)
   const err = await t.throwsAsync(
-    async () => await verifyTdx(mutated, { date: BASE_TIME, crls: [] }),
+    async () =>
+      await verifyTdx(mutated, {
+        date: BASE_TIME,
+        crls: [],
+        verifyTcb: () => true,
+      }),
   )
   t.truthy(err)
   t.regex(err!.message, /Unsupported quote version/i)
