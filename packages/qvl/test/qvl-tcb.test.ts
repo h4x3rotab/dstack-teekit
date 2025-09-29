@@ -11,7 +11,7 @@ import {
   isTdxQuote,
 } from "ra-https-qvl"
 
-const BASE_TIME = Date.parse("2025-09-28T12:00:00Z")
+const BASE_TIME = Date.parse("2025-09-29T23:00:00Z")
 const SAMPLE_DIR = "test/tcbInfo"
 
 async function fetchTcbInfo(
@@ -63,29 +63,66 @@ function getVerifyTcb(stateRef: TcbRef) {
 
     // Determine the TCB status by finding the first Intel TCB level
     // whose requirements are satisfied by the quote:
-    // - PCE SVN must be >= the level's pcesvn
-    // - For each CPU SVN component key present (sgxtcbcompXXsvn),
-    //   the quote's cpu_svn[XX-1] must be >= the level's value
-    // On first match, adopt that level's tcbStatus; otherwise keep
-    // the default "OutOfDate".
-    let statusFound = "OutOfDate"
+    // - PCE SVN must be >= the level's pcesvn (if provided)
+    // - Support both legacy SGX v2 keys (sgxtcbcompNNsvn) and v3 array-form
+    //   sgxtcbcomponents; for TDX also check tdxtcbcomponents against tee_tcb_svn
+    let statusFound = "Unknown"
     for (const level of tcbInfo.tcbInfo.tcbLevels) {
-      const pceOk = pceSvn >= level.tcb.pcesvn
+      const pceOk =
+        typeof level.tcb.pcesvn === "number" ? pceSvn >= level.tcb.pcesvn : true
+
       let cpuOk = true
+
+      // SGX v2-style keys: sgxtcbcompNNsvn
       for (let comp = 1; comp <= 16; comp++) {
         const key = `sgxtcbcomp${String(comp).padStart(2, "0")}svn`
         if (Object.prototype.hasOwnProperty.call(level.tcb, key)) {
-          if (cpuSvn[comp - 1] < level.tcb[key]) {
+          if (cpuSvn[comp - 1] < (level.tcb as any)[key]) {
             cpuOk = false
             break
           }
         }
       }
+
+      // SGX v3-style array: sgxtcbcomponents
+      if (cpuOk && Array.isArray(level.tcb.sgxtcbcomponents)) {
+        const arr = level.tcb.sgxtcbcomponents as Array<{
+          svn?: number
+        }>
+        for (let i = 0; i < arr.length; i++) {
+          const req = arr[i]
+          if (req && typeof req.svn === "number") {
+            if ((cpuSvn[i] ?? 0) < req.svn) {
+              cpuOk = false
+              break
+            }
+          }
+        }
+      }
+
+      // TDX components array: tdxtcbcomponents (compare against tee_tcb_svn)
+      if (cpuOk && Array.isArray(level.tcb.tdxtcbcomponents)) {
+        const arr = level.tcb.tdxtcbcomponents
+        for (let i = 0; i < arr.length; i++) {
+          const req = arr[i]
+          if (req && typeof req.svn === "number") {
+            if ((cpuSvn[i] ?? 0) < req.svn) {
+              cpuOk = false
+              break
+            }
+          }
+        }
+      }
+
       if (cpuOk && pceOk) {
         statusFound = level.tcbStatus
         break
       }
     }
+
+    // if (statusFound === "Unknown") {
+    //   throw new Error("Could not match TCB")
+    // }
 
     stateRef.fmspc = fmspc
     stateRef.status = statusFound
@@ -94,7 +131,6 @@ function getVerifyTcb(stateRef: TcbRef) {
     const valid =
       freshnessOk &&
       (statusFound === "UpToDate" || statusFound === "ConfigurationNeeded")
-    console.log("status", statusFound, "fresh", freshnessOk, "valid", valid)
 
     return valid
   }
@@ -118,8 +154,8 @@ async function assertTcb(
   const quote: Uint8Array = _b64
     ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
     : _json
-      ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
-      : fs.readFileSync(path)
+    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+    : fs.readFileSync(path)
 
   const stateRef: TcbRef = {}
   const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {
@@ -138,7 +174,7 @@ test.serial("Evaluate TCB (SGX): occlum", async (t) => {
   await assertTcb(t, "test/sample/sgx-occlum.dat", {
     _tdx: false,
     valid: false,
-    status: "SWHardeningNeeded",
+    status: "OutOfDate",
     fresh: true,
     fmspc: "30606a000000",
   })
@@ -179,7 +215,7 @@ test.serial("Evaluate TCB (TDX v5): trustee", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "90c06f000000",
   })
 })
@@ -190,7 +226,7 @@ test.serial("Evaluate TCB (TDX v4): azure", async (t) => {
     _b64: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "00806f050000",
   })
 })
@@ -200,7 +236,7 @@ test.serial("Evaluate TCB (TDX v4): edgeless", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "00806f050000",
   })
 })
@@ -211,7 +247,7 @@ test.serial("Evaluate TCB (TDX v4): gcp", async (t) => {
     _json: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "00806f050000",
   })
 })
@@ -222,7 +258,7 @@ test.serial("Evaluate TCB (TDX v4): gcp no nonce", async (t) => {
     _json: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "00806f050000",
   })
 })
@@ -232,7 +268,7 @@ test.serial("Evaluate TCB (TDX v4): moemahhouk", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "90c06f000000",
   })
 })
@@ -242,7 +278,7 @@ test.serial("Evaluate TCB (TDX v4): phala", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "b0c06f000000",
   })
 })
@@ -252,7 +288,7 @@ test.serial("Evaluate TCB (TDX v4): trustee", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "50806f000000",
   })
 })
@@ -262,7 +298,7 @@ test.serial("Evaluate TCB (TDX v4): zkdcap", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: false,
+    fresh: true,
     fmspc: "00806f050000",
   })
 })

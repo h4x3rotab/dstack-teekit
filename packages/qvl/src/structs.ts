@@ -132,7 +132,6 @@ export type IntelTcbInfo = {
         | "OutOfDateConfigurationNeeded"
         | "ConfigurationNeeded"
         | "Revoked"
-        | string
     }>
   }
   signature?: string
