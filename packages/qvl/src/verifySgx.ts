@@ -177,7 +177,7 @@ export async function _verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   const parsedQuote = parseSgxQuote(quote)
   const { signature, header } = parsedQuote
   const certs = extractPemCertificates(signature.cert_data)
-  let { status, root, fmspc } = await verifyPCKChain(
+  let { status, root, fmspc, pcesvn } = await verifyPCKChain(
     certs,
     date ?? +new Date(),
     crls,
@@ -196,12 +196,14 @@ export async function _verifySgx(quote: Uint8Array, config?: VerifyConfig) {
     status = fallback.status
     root = fallback.root
     fmspc = fallback.fmspc
+    pcesvn = fallback.pcesvn
   }
 
   return {
     status,
     root,
     fmspc,
+    pcesvn,
     signature,
     header,
     extraCertdata,
@@ -221,6 +223,7 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
     status,
     root,
     fmspc,
+    pcesvn,
     signature,
     header,
     extraCertdata,
@@ -257,7 +260,7 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   if (header.att_key_type !== 2) {
     throw new Error("verifySgx: only ECDSA att_key_type is supported")
   }
-  if (signature.cert_data_type !== 5 && signature.cert_data_type !== 1) {
+  if (signature.cert_data_type !== 1 && signature.cert_data_type !== 5) {
     throw new Error("verifySgx: only PCK cert_data is supported")
   }
 
@@ -274,13 +277,18 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   if (fmspc === null) {
     throw new Error("verifySgx: TCB missing fmspc")
   }
+  if (pcesvn === null) {
+    throw new Error(`verifySgx: TCB missing pcesvn`)
+  }
+
   if (
     config?.verifyTcb &&
     !(await config.verifyTcb({
       quote: parsedQuote,
       fmspc,
       cpuSvn: Array.from(parsedQuote.body.cpu_svn),
-      pceSvn: parsedQuote.header.pce_svn,
+      pceSvn:
+        signature.cert_data_type === 1 ? parsedQuote.header.pce_svn : pcesvn,
     }))
   ) {
     // throw new Error("verifySgx: TCB invalid fmspc")
