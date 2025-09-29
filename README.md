@@ -3,36 +3,34 @@
 This repository implements RA-HTTPS and RA-WSS, a set of protocols for
 connecting to Secure Enclaves and Trusted Execution Environments.
 
-By default, browsers have no way of verifying they are connected to a
-TEE, because they don't expose certificate information to the web page
-that can use to prove a connection terminates inside the enclave. This
-breaks the security and privacy, since SSL proxies (like Cloudflare)
-can trivially see and modify traffic to the TEE.
+## Background
 
-This package includes a built-in secure channel that authenticates the
-TEE and ensures it's running up-to-date hardware, entirely from in the
-browser.
+By default, web pages have no way of verifying they are connected to a
+TEE, because browsers don't expose certificate information that proves
+a connection terminates inside the enclave. This breaks security and
+privacy properties of TEEs, since proxies like Cloudflare can
+trivially see and modify traffic that goes through them.
 
-This makes it possible to build verifiable, private web applications,
-where neither the developer nor host of the application can see your
-data, and end users can verify the code they are interacting with.
+To work around this, TEE application hosts typically insert a proxy in
+front of the TEE that verifies the connection into the enclave, but this
+just moves trust assumptions to the proxy instead.
 
-It also makes it possible to build composable backends for web
-applications, private AI clouds, private sync backends for local-first
-software, and other kinds of software with privacy and composability
-guarantees.
+This repository provides a library that web pages can use to establish a
+secure channel into Intel TDX/SGX, that authenticates the TEE and
+ensures it's running up-to-date firmware, entirely from within the browser.
+This makes it possible to build browser applications that connect to a
+verifiable, privacy-preserving backend.
 
 ## Components
 
-- ra-https-tunnel:
+- ra-https-tunnel: Establishes encrypted channels into TEEs.
   - Encrypted HTTP requests via a `fetch`-compatible API
   - Encrypted WebSockets via a `WebSocket`-compatible API
   - ServiceWorker for upgrading HTTP requests from a browser page
     to use the encrypted channel
-- ra-https-qvl:
-  - Lightweight, WebCrypto-based SGX/TDX quote verification library
+- ra-https-qvl: WebCrypto-based SGX/TDX quote verification library
   - Validates the full chain of trust from the root CA, down to report binding
-  - Embedded CRL/TCB validation that can be used from your browser
+  - Includes embedded CRL/TCB validation that can be used from your browser
 - ra-https-demo:
   - A [demo application](https://ra-https.vercel.app/) that supports
     HTTPS and WSS requests over the encrypted channel, both with and without
