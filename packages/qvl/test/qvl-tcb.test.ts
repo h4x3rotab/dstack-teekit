@@ -3,15 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { base64 as scureBase64 } from "@scure/base"
 
-import {
-  verifySgx,
-  verifyTdx,
-  isSgxQuote,
-  isTdxQuote,
-  SgxQuote,
-  TdxQuote,
-  IntelTcbInfo,
-} from "ra-https-qvl"
+import { verifySgx, verifyTdx, IntelTcbInfo, VerifyConfig } from "ra-https-qvl"
 
 const BASE_TIME = Date.parse("2025-09-28T12:00:00Z")
 const SAMPLE_DIR = "test/sample"
@@ -40,27 +32,10 @@ type TcbRef = { status?: string; freshnessOk?: boolean; fmspc?: string }
 
 // Builds a verifyTcb hook that captures the status & freshness
 function getVerifyTcb(stateRef: TcbRef) {
-  type Quote = SgxQuote | TdxQuote
-
-  return async (fmspcHex: string, quote: Quote): Promise<boolean> => {
-    // Extract cpu_svn, pce_svn
-    let cpuSvn: number[] | null = null
-    let pceSvn: number | null = null
-    let tdx = false
-    if (isSgxQuote(quote)) {
-      cpuSvn = Array.from(quote.body.cpu_svn)
-      pceSvn = quote.header.pce_svn
-      tdx = false
-    } else if (isTdxQuote(quote)) {
-      cpuSvn = Array.from(quote.body.tee_tcb_svn)
-      pceSvn = quote.header.pce_svn
-      tdx = true
-    } else {
-      return false
-    }
-
+  type VerifyArgs = Parameters<VerifyConfig["verifyTcb"]>[0]
+  return async ({ fmspc, cpuSvn, pceSvn }: VerifyArgs): Promise<boolean> => {
     // Fetch TCB info
-    const tcbInfo = await fetchTcbInfo(fmspcHex)
+    const tcbInfo = await fetchTcbInfo(fmspc)
     const now = BASE_TIME
 
     // Check freshness
@@ -94,7 +69,7 @@ function getVerifyTcb(stateRef: TcbRef) {
       }
     }
 
-    stateRef.fmspc = fmspcHex
+    stateRef.fmspc = fmspc
     stateRef.status = statusFound
     stateRef.freshnessOk = freshnessOk
 
@@ -125,8 +100,8 @@ async function assertTcb(
   const quote: Uint8Array = _b64
     ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
     : _json
-      ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
-      : fs.readFileSync(path)
+    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+    : fs.readFileSync(path)
 
   const stateRef: TcbRef = {}
   const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {

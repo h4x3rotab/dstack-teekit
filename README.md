@@ -65,7 +65,7 @@ async function main() {
     mrtd: expectedMrtd,
     report_data: expectedReportData,
     crl: [], // certificate revocation list
-    verifyTcb: () => true, // no additional checks for TCB freshness
+    verifyTcb: () => true, // check for TCB freshness
     // sgx: true // defaults to TDX otherwise
   })
 

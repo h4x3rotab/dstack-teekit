@@ -274,7 +274,15 @@ export async function verifySgx(quote: Uint8Array, config?: VerifyConfig) {
   if (fmspc === null) {
     throw new Error("verifySgx: TCB missing fmspc")
   }
-  if (config?.verifyTcb && !(await config.verifyTcb(fmspc, parsedQuote))) {
+  if (
+    config?.verifyTcb &&
+    !(await config.verifyTcb({
+      quote: parsedQuote,
+      fmspc,
+      cpuSvn: Array.from(parsedQuote.body.cpu_svn),
+      pceSvn: parsedQuote.header.pce_svn,
+    }))
+  ) {
     // throw new Error("verifySgx: TCB invalid fmspc")
     return false
   }

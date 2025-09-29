@@ -17,7 +17,12 @@ import { SgxQuote } from "./verifySgx.js"
 
 export interface VerifyConfig {
   crls: Uint8Array[]
-  verifyTcb: (fmspc: string, quote: TdxQuote | SgxQuote) => Awaitable<boolean>
+  verifyTcb: (config: {
+    fmspc: string
+    quote: TdxQuote | SgxQuote
+    pceSvn: number
+    cpuSvn: number[]
+  }) => Awaitable<boolean>
   pinnedRootCerts?: QV_X509Certificate[]
   date?: number
   extraCertdata?: string[]
@@ -455,7 +460,15 @@ export async function verifyTdx(quote: Uint8Array, config?: VerifyConfig) {
   if (fmspc === null) {
     throw new Error("verifyTdx: TCB missing fmspc")
   }
-  if (config?.verifyTcb && !(await config.verifyTcb(fmspc, parsedQuote))) {
+  if (
+    config?.verifyTcb &&
+    !(await config.verifyTcb({
+      fmspc,
+      quote: parsedQuote,
+      cpuSvn: Array.from(parsedQuote.body.tee_tcb_svn),
+      pceSvn: parsedQuote.header.pce_svn,
+    }))
+  ) {
     // throw new Error("verifyTdx: TCB invalid fmspc")
     return false
   }
