@@ -115,6 +115,43 @@ async function main() {
 main()
 ```
 
+You may also use the included ServiceWorker to transparently upgrade
+HTTP GET/POST requests to go over the encrypted channel to your
+`TunnelServer`.
+
+To do this, first add the ServiceWorker plugin to your bundler. You
+can use an included Vite plugin to handle this, or manually serve
+`__ra-serviceworker__.js` at your web root from
+`node_modules/ra-https-tunnel/lib/sw.build.js`::
+
+```js
+// vite.config.js
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+import { includeRaServiceWorker } from "ra-https-tunnel/sw"
+
+export default defineConfig({
+  plugins: [react(), includeRaServiceWorker()],
+})
+```
+
+Then, register the ServiceWorker at app startup, pointed at your
+tunnel origin:
+
+```ts
+// src/main.tsx (or similar)
+import { registerServiceWorker } from "ra-https-tunnel/register"
+
+const baseUrl = "http://127.0.0.1:3000" // your TunnelServer origin
+registerServiceWorker(baseUrl)
+```
+
+Note that different browsers vary in their support of ServiceWorkers.
+Some browsers may block ServiceWorkers from being installed. By
+default, they intercept link clicks, location.assign() calls,
+subresource requests, and fetch() / XMLHttpRequest requests (but not
+WebSockets).
+
 ## Demo
 
 The packages/demo directory contains a demo of a chat app that relays
