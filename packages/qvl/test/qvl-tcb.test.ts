@@ -3,28 +3,40 @@ import fs from "node:fs"
 import path from "node:path"
 import { base64 as scureBase64 } from "@scure/base"
 
-import { verifySgx, verifyTdx, IntelTcbInfo, VerifyConfig } from "ra-https-qvl"
+import {
+  verifySgx,
+  verifyTdx,
+  IntelTcbInfo,
+  VerifyConfig,
+  isTdxQuote,
+} from "ra-https-qvl"
 
 const BASE_TIME = Date.parse("2025-09-28T12:00:00Z")
-const SAMPLE_DIR = "test/sample"
+const SAMPLE_DIR = "test/tcbInfo"
 
-async function fetchTcbInfo(fmspcHex: string): Promise<IntelTcbInfo> {
+async function fetchTcbInfo(
+  fmspcHex: string,
+  tdx: boolean,
+): Promise<IntelTcbInfo> {
   const fmspc = fmspcHex.toLowerCase()
-  const cachePath = path.join(SAMPLE_DIR, `tcbInfo-${fmspc}.json`)
+  const tdxsgx = tdx ? "tdx" : "sgx"
+  const cachePath = path.join(SAMPLE_DIR, `tcbInfo-${tdxsgx}-${fmspc}.json`)
 
   if (fs.existsSync(cachePath)) {
     const raw = fs.readFileSync(cachePath, "utf8")
     return JSON.parse(raw)
   } else {
     console.log("[unexpected!] getting tcbInfo from API:", fmspcHex)
-    const url = `https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=${fmspc}`
+    const url = `https://api.trustedservices.intel.com/${tdxsgx}/certification/v4/tcb?fmspc=${fmspc}`
     const resp = await fetch(url, { headers: { Accept: "application/json" } })
     if (!resp.ok) {
       throw new Error(
         `Failed to fetch TCB info for FMSPC=${fmspc}: ${resp.status} ${resp.statusText}`,
       )
     }
-    return await resp.json()
+    const result = await resp.json()
+    // fs.writeFileSync(cachePath, JSON.stringify(result), "utf8")
+    return result
   }
 }
 
@@ -33,9 +45,15 @@ type TcbRef = { status?: string; freshnessOk?: boolean; fmspc?: string }
 // Builds a verifyTcb hook that captures the status & freshness
 function getVerifyTcb(stateRef: TcbRef) {
   type VerifyArgs = Parameters<VerifyConfig["verifyTcb"]>[0]
-  return async ({ fmspc, cpuSvn, pceSvn }: VerifyArgs): Promise<boolean> => {
+  return async ({
+    fmspc,
+    cpuSvn,
+    pceSvn,
+    quote,
+  }: VerifyArgs): Promise<boolean> => {
     // Fetch TCB info
-    const tcbInfo = await fetchTcbInfo(fmspc)
+    const isTdx = isTdxQuote(quote)
+    const tcbInfo = await fetchTcbInfo(fmspc, isTdx)
     const now = BASE_TIME
 
     // Check freshness
@@ -76,7 +94,7 @@ function getVerifyTcb(stateRef: TcbRef) {
     const valid =
       freshnessOk &&
       (statusFound === "UpToDate" || statusFound === "ConfigurationNeeded")
-    // console.log("status", statusFound, "fresh", freshnessOk, "valid", valid)
+    console.log("status", statusFound, "fresh", freshnessOk, "valid", valid)
 
     return valid
   }
@@ -100,8 +118,8 @@ async function assertTcb(
   const quote: Uint8Array = _b64
     ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
     : _json
-    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
-    : fs.readFileSync(path)
+      ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+      : fs.readFileSync(path)
 
   const stateRef: TcbRef = {}
   const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {
@@ -161,7 +179,7 @@ test.serial("Evaluate TCB (TDX v5): trustee", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "90c06f000000",
   })
 })
@@ -172,7 +190,7 @@ test.serial("Evaluate TCB (TDX v4): azure", async (t) => {
     _b64: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "00806f050000",
   })
 })
@@ -182,7 +200,7 @@ test.serial("Evaluate TCB (TDX v4): edgeless", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "00806f050000",
   })
 })
@@ -193,7 +211,7 @@ test.serial("Evaluate TCB (TDX v4): gcp", async (t) => {
     _json: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "00806f050000",
   })
 })
@@ -204,7 +222,7 @@ test.serial("Evaluate TCB (TDX v4): gcp no nonce", async (t) => {
     _json: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "00806f050000",
   })
 })
@@ -214,7 +232,7 @@ test.serial("Evaluate TCB (TDX v4): moemahhouk", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "90c06f000000",
   })
 })
@@ -224,7 +242,7 @@ test.serial("Evaluate TCB (TDX v4): phala", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "b0c06f000000",
   })
 })
@@ -234,7 +252,7 @@ test.serial("Evaluate TCB (TDX v4): trustee", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "50806f000000",
   })
 })
@@ -244,7 +262,7 @@ test.serial("Evaluate TCB (TDX v4): zkdcap", async (t) => {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
-    fresh: true,
+    fresh: false,
     fmspc: "00806f050000",
   })
 })
