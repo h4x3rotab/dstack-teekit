@@ -323,7 +323,7 @@ export class QV_X509Certificate {
             if (bytes.length === 1) {
               return bytes[0]
             } else if (bytes.length === 2) {
-              // In case it's encoded as 2 bytes
+              // In case it's encoded as 2 bytes, decode it as a little-endian integer
               return bytes[0] | (bytes[1] << 8)
             }
           }
