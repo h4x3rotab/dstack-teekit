@@ -5,44 +5,49 @@
 
 This repository implements a protocol for remotely-attested HTTPS and
 WSS channels, which web pages can use to establish secure connections
-terminating inside Intel TDX/SGX enclaves.
+terminating inside trusted execution environments (currently Intel TDX/SGX).
 
 ## Background
 
-Trusted execution environments make it possible to build private,
-verifiable web services, but web pages cannot verify they are
-connected to a TEE. This is because browsers don't expose certificate
-information that proves a connection terminates inside the secured
-environment, so proxies like Cloudflare can trivially see and modify
-traffic to TEEs forwarded through them, and anyone hosting a TEE app
-can insert their own TLS proxies to break confidentiality.
+Trusted execution environments make it possible to build private and
+verifiable web services, but one limitation that makes this harder is
+that web pages cannot natively verify that they're connected to a
+TEE. Browsers don't expose X.509 certificate extensions that can be
+used to prove a connection terminates inside the secured environment,
+so proxies like Cloudflare can trivially see and modify traffic to
+TEEs forwarded through them. Anyone hosting a TEE app can easily insert
+their own TLS proxy in front of it, breaking privacy and extracting
+session data that lets them impersonate the user.
 
-To work around this, some TEE application hosts use their own proxy in
-front of the TEE to verify connection integrity, but this requires
-users to trust the new proxy, and makes setting up applications
-harder. Or, hosts may use certificate log monitoring, but this only
-happens out-of-band and does not protect the connection between the
-user and the TEE.
+To work around this, some TEE application hosts implement their own
+proxy in front of the TEE, but this simply moves trust to a different
+proxy. Hosts may also use certificate log monitoring to boost security,
+but this happens out-of-band and doesn't directly protect the
+connection between the user and the TEE.
 
-Applications using encrypted TEE channels can just use public
-certificate authorities like Let's Encrypt and Cloudflare, while
-keeping the guarantee that users are directly connecting to the TEE.
-(_The `tee-channels` package is a building block, intended as part of a
-planned larger system for simplifying the deployment of TEE
-applications._)
+Applications using tee-channels can treat TEEs like a regular web
+server, and use public certificate authorities like Let's Encrypt and
+Cloudflare to protect them. Third parties can host copies of the same
+application on IPFS or other immutable cloud services. The TEE channel
+embeds an end-to-end TEE verification flow in the browser, including
+quote verification, certificate revocation lists, and checks for TCB
+firmware freshness.
 
 ## Features
 
 - tee-channels-tunnel:
-  - Encrypted HTTP requests via a `fetch`-compatible API
-  - Encrypted WebSockets via a `WebSocket`-compatible API
-  - ServiceWorker for upgrading HTTP requests from a browser page
-    to use the encrypted channel
+  - Establishes tunneled connections to a TEE through an encrypted
+    WebSocket, after key exchange, quote validation, and CRL/TCB validation
+  - Supports encrypted HTTP requests via a `fetch`-compatible API
+  - Supports encrypted WebSockets via a `WebSocket`-compatible API
+  - Includes a ServiceWorker for upgrading all HTTP requests from a
+    browser page to use the encrypted channel
 - tee-channels-qvl:
   - WebCrypto-based SGX/TDX quote verification library
   - Validates the full chain of trust from the root CA, down to binding
     the public key of the encrypted channel in `report_data`
-  - Includes CRL/TCB validation that can be (mostly) used from your browser
+  - Includes optional CRL/TCB validation inside the browser. (TCB info
+    cannot be fetched from Intel using JavaScript without a CORS proxy.)
 - tee-channels-demo:
   - A [demo application](https://tee-channels.vercel.app/) that supports
     HTTPS and WSS requests over the encrypted channel, both with and without
