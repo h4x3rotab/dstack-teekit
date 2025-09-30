@@ -2,11 +2,11 @@ import test from "ava"
 import fs from "node:fs"
 import { base64 as scureBase64 } from "@scure/base"
 
-import { parseTdxQuoteBase64 } from "tee-channels-qvl"
+import { parseTdxQuoteBase64 } from "@teekit/qvl"
 import {
   getExpectedReportDataFromUserdata,
   isUserdataBound,
-} from "tee-channels-qvl/utils"
+} from "@teekit/qvl/utils"
 
 test.serial("get expected report_data by nonce, iat, userdata", async (t) => {
   const data = JSON.parse(

@@ -244,11 +244,11 @@ scripts/setup-systemd-service.sh
 Create a Intel TDX CLI config.json inside `packages/demo`, and then restart the service:
 
 ```
-systemctl restart tee-channels
+systemctl restart teekit-demo
 ```
 
 To view logs:
 
 ```
-journalctl -uf tee-channels
+journalctl -uf teekit-demo
 ```

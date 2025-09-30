@@ -2,10 +2,10 @@
 set -eu
 [ "$(id -u)" -eq 0 ] || { echo "run as root"; exit 1; }
 
-UNIT=/etc/systemd/system/tee-channels.service
+UNIT=/etc/systemd/system/teekit-demo.service
 
-systemctl stop tee-channels.service 2>/dev/null || true
-systemctl disable tee-channels.service 2>/dev/null || true
+systemctl stop teekit-demo.service 2>/dev/null || true
+systemctl disable teekit-demo.service 2>/dev/null || true
 
 rm -f "$UNIT"
 systemctl daemon-reload

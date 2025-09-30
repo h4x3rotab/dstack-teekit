@@ -1,1 +1,1 @@
-## tee-channels-tunnel
+## @teekit/tunnel

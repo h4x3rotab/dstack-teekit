@@ -3,8 +3,8 @@ import express from "express"
 import type { AddressInfo } from "node:net"
 import sodium from "libsodium-wrappers"
 
-import { TunnelClient, TunnelServer } from "tee-channels-tunnel"
-import { hex, parseTdxQuote } from "tee-channels-qvl"
+import { TunnelClient, TunnelServer } from "@teekit/tunnel"
+import { hex, parseTdxQuote } from "@teekit/qvl"
 
 import { loadQuote } from "./helpers/helpers.js"
 

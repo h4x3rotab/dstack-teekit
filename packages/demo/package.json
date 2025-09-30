@@ -1,5 +1,5 @@
 {
-  "name": "tee-channels-demo",
+  "name": "@teekit/demo",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -14,8 +14,8 @@
     "@scure/base": "^2.0.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "tee-channels-qvl": "0.0.1",
-    "tee-channels-tunnel": "0.0.1",
+    "@teekit/qvl": "0.0.1",
+    "@teekit/tunnel": "0.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "ws": "^8.18.3"

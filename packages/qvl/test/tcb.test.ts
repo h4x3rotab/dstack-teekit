@@ -9,8 +9,8 @@ import {
   VerifyConfig,
   verifySgx,
   verifyTdx,
-} from "tee-channels-qvl"
-import { getTcbStatus, isTcbInfoFresh, TcbRef } from "tee-channels-qvl/tcb"
+} from "@teekit/qvl"
+import { getTcbStatus, isTcbInfoFresh, TcbRef } from "@teekit/qvl/tcb"
 
 const BASE_TIME = Date.parse("2025-09-29T23:00:00Z")
 const SAMPLE_DIR = "test/sampleTcbInfos"
@@ -83,8 +83,8 @@ async function assertTcb(
   const quote: Uint8Array = _b64
     ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
     : _json
-    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
-    : fs.readFileSync(path)
+      ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+      : fs.readFileSync(path)
 
   const stateRef: TcbRef = {}
   const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {

@@ -7,13 +7,10 @@ import {
   TdxQuote,
   verifySgx,
   verifyTdx,
-} from "tee-channels-qvl"
+} from "@teekit/qvl"
 import { base64 as scureBase64 } from "@scure/base"
 // no extra utils needed here
-import {
-  getExpectedReportDataFromUserdata,
-  isUserdataBound,
-} from "tee-channels-qvl"
+import { getExpectedReportDataFromUserdata, isUserdataBound } from "@teekit/qvl"
 import { encode as encodeCbor, decode as decodeCbor } from "cbor-x"
 import createDebug from "debug"
 
@@ -46,7 +43,7 @@ export type TunnelClientConfig = {
   sgx?: boolean // default to TDX
 }
 
-const debug = createDebug("tee-channels:TunnelClient")
+const debug = createDebug("teekit:TunnelClient")
 
 /**
  * Client for opening an encrypted remote-attested channel.
@@ -259,7 +256,7 @@ export class TunnelClient {
               this.reportBindingData = { runtimeData, verifierData }
             }
           } catch {
-            console.error("tee-channels: Malformed report binding data")
+            console.error("teekit: Malformed report binding data")
           }
 
           // Decode and store X25519 key from server

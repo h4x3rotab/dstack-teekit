@@ -11,12 +11,12 @@ import {
   verifyTdxBase64,
   getTdx10SignedRegion,
   QV_X509Certificate,
-} from "tee-channels-qvl"
+} from "@teekit/qvl"
 import {
   extractPemCertificates,
   reverseHexBytes,
   normalizeSerialHex,
-} from "tee-channels-qvl/utils"
+} from "@teekit/qvl/utils"
 import {
   tamperPemSignature,
   buildCRL,

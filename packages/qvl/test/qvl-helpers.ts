@@ -6,11 +6,8 @@ import {
   parseSgxQuote,
   verifyPCKChain,
   QV_X509Certificate,
-} from "tee-channels-qvl"
-import {
-  extractPemCertificates,
-  computeCertSha256Hex,
-} from "tee-channels-qvl/utils"
+} from "@teekit/qvl"
+import { extractPemCertificates, computeCertSha256Hex } from "@teekit/qvl/utils"
 
 export function pemToDer(pem: string): Buffer {
   const b64 = pem

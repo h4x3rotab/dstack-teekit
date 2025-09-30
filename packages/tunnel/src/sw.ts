@@ -70,7 +70,7 @@ async function ensureConnection(): Promise<void> {
 
     ws.onopen = () => {
       console.log(
-        "[tee-channels-sw] ServiceWorker WebSocket opened to",
+        "[teekit-sw] ServiceWorker WebSocket opened to",
         url.toString(),
       )
       // Wait for server_kx before resolving
@@ -85,7 +85,7 @@ async function ensureConnection(): Promise<void> {
         let message: any = decode(bytes)
 
         console.log(
-          "[tee-channels-sw] ServiceWorker received message:",
+          "[teekit-sw] ServiceWorker received message:",
           message?.type || "unknown",
           message,
         )
@@ -107,7 +107,7 @@ async function ensureConnection(): Promise<void> {
                 sodium.base64_variants.ORIGINAL,
               ),
             }
-            console.log("[tee-channels-sw] ServiceWorker completing client_kx")
+            console.log("[teekit-sw] ServiceWorker completing client_kx")
             ws!.send(encode(reply))
 
             connectionPromise = null
@@ -133,7 +133,7 @@ async function ensureConnection(): Promise<void> {
           if (message && message.type === "http_response") {
             const res = message as RAEncryptedHTTPResponse
             console.log(
-              `[tee-channels-sw] ServiceWorker received HTTP response ${res.requestId} (${res.status})`,
+              `[teekit-sw] ServiceWorker received HTTP response ${res.requestId} (${res.status})`,
             )
             const pending = pendingRequests.get(res.requestId)
             if (!pending) return
@@ -144,7 +144,7 @@ async function ensureConnection(): Promise<void> {
               return
             }
 
-            const body = res.status === 204 ? null : res.body ?? null
+            const body = res.status === 204 ? null : (res.body ?? null)
             const response = new Response(body as any, {
               status: res.status,
               statusText: res.statusText,
@@ -160,7 +160,7 @@ async function ensureConnection(): Promise<void> {
     }
 
     ws.onclose = () => {
-      console.log("[tee-channels-sw] ServiceWorker WebSocket closed")
+      console.log("[teekit-sw] ServiceWorker WebSocket closed")
       connectionPromise = null
       symmetricKey = undefined
       try {
@@ -173,7 +173,7 @@ async function ensureConnection(): Promise<void> {
     }
 
     ws.onerror = () => {
-      console.log("[tee-channels-sw] ServiceWorker WebSocket connection error")
+      console.log("[teekit-sw] ServiceWorker WebSocket connection error")
       const err = new Error("WebSocket connection failed")
       connectionPromise = null
       try {
@@ -236,7 +236,7 @@ async function tunnelFetch(request: Request): Promise<Response> {
   }
 
   console.log(
-    "[tee-channels-sw] ServiceWorker sent HTTP request:",
+    "[teekit-sw] ServiceWorker sent HTTP request:",
     requestId,
     request.method,
     forwardUrl,

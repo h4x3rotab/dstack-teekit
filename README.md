@@ -1,8 +1,8 @@
-# tee-channels
+# teekit
 
-[![tests](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml/badge.svg)](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml)
-[![node](https://img.shields.io/node/v/tee-channels-qvl.svg)](https://www.npmjs.com/package/@canvas-js/core)
-[![npm](https://img.shields.io/npm/v/tee-channels-tunnel?color=33cd56&logo=npm)](https://www.npmjs.com/package/tee-channels-tunnel)
+[![tests](https://github.com/canvasxyz/teekit/actions/workflows/ci.yml/badge.svg)](https://github.com/canvasxyz/teekit/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/@teekit/qvl.svg)](https://www.npmjs.com/package/@teekit/qvl)
+[![npm](https://img.shields.io/npm/v/@teekit/tunnel?color=33cd56&logo=npm)](https://www.npmjs.com/package/@teekit/tunnel)
 
 This repository implements protocols for remotely-attested HTTPS and
 WSS channels, which web pages can use to establish secure connections
@@ -27,7 +27,7 @@ proxy. Hosts may also use certificate log monitoring to boost security,
 but this happens out-of-band and doesn't directly protect the
 connection between the user and the TEE.
 
-Applications using tee-channels can treat TEEs like a regular web
+Applications using teekit can treat TEEs like a regular web
 server, and use public certificate authorities like Let's Encrypt and
 Cloudflare to protect them. Third parties can host copies of the same
 application on IPFS or other immutable cloud services. The TEE channel
@@ -37,21 +37,21 @@ firmware freshness.
 
 ## Features
 
-- tee-channels-tunnel:
+- @teekit/tunnel:
   - Establishes tunneled connections to a TEE through an encrypted
     WebSocket, after key exchange, quote validation, and CRL/TCB validation
   - Supports encrypted HTTP requests via a `fetch`-compatible API
   - Supports encrypted WebSockets via a `WebSocket`-compatible API
   - Includes a ServiceWorker for upgrading all HTTP requests from a
     browser page to use the encrypted channel
-- tee-channels-qvl:
+- @teekit/qvl:
   - WebCrypto-based SGX/TDX quote verification library
   - Validates the full chain of trust from the root CA, down to binding
     the public key of the encrypted channel in `report_data`
   - Includes optional CRL/TCB validation inside the browser. (TCB info
     cannot be fetched from Intel using JavaScript without a CORS proxy.)
-- tee-channels-demo:
-  - A [demo application](https://tee-channels.vercel.app/) that supports
+- @teekit/demo:
+  - A [demo application](https://teekit.vercel.app/) that supports
     HTTPS and WSS requests over the encrypted channel, both with and without
     the embedded ServiceWorker.
 
@@ -69,8 +69,8 @@ Your client will validate all measurements, quote signatures, and
 additional CRL/TCB info before opening a connection.
 
 ```ts
-import { TunnelClient } from "tee-channels-tunnel"
-import { hex, parseTdxQuote } from "tee-channels-qvl"
+import { TunnelClient } from "@teekit/tunnel"
+import { hex, parseTdxQuote } from "@teekit/qvl"
 
 async function main() {
   const origin = "http://127.0.0.1:3000"
@@ -107,7 +107,7 @@ arbitrary backends through Nginx.
 
 ```ts
 import express from "express"
-import { TunnelServer } from "tee-channels-tunnel"
+import { TunnelServer } from "@teekit/tunnel"
 
 async function main() {
   const app = express()
@@ -125,7 +125,7 @@ async function main() {
   })
 
   tunnelServer.server.listen(3000, () => {
-    console.log("tee-channels service listening on :3000")
+    console.log("teekit service listening on :3000")
   })
 }
 
@@ -139,13 +139,13 @@ HTTP GET/POST requests to go over the encrypted channel to your
 To do this, first add the ServiceWorker plugin to your bundler. You
 can use an included Vite plugin to handle this, or manually serve
 `__ra-serviceworker__.js` at your web root from
-`node_modules/tee-channels-tunnel/lib/sw.build.js`::
+`node_modules/@teekit/tunnel/lib/sw.build.js`::
 
 ```js
 // vite.config.js
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
-import { includeRaServiceWorker } from "tee-channels-tunnel/sw"
+import { includeRaServiceWorker } from "@teekit/tunnel/sw"
 
 export default defineConfig({
   plugins: [react(), includeRaServiceWorker()],
@@ -157,7 +157,7 @@ tunnel origin:
 
 ```ts
 // src/main.tsx (or similar)
-import { registerServiceWorker } from "tee-channels-tunnel/register"
+import { registerServiceWorker } from "@teekit/tunnel/register"
 
 const baseUrl = "http://127.0.0.1:3000" // your TunnelServer origin
 registerServiceWorker(baseUrl)
@@ -200,7 +200,7 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
    `ws(s)://<host>:<port>/__ra__`.
 2. Server immediately sends `server_kx` with an X25519 public key and
    a TDX/SGX attestation quote.
-3. Client verifies the quote (using `tee-channels-qvl`), optionally
+3. Client verifies the quote (using `@teekit/qvl`), optionally
    enforces `mrtd`/`report_data` or a custom matcher, generates a
    symmetric key, and sends it sealed to the server via `client_kx`
    (libsodium `crypto_box_seal`).
@@ -210,7 +210,7 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
 
 ## Limitations
 
-- For security reasons, we currently require that all WebSocket connections to the HTTP server go through the encrypted channel. Mixing and matching unencrypted WebSockets and tee-channels is not supported.
+- For security reasons, we currently require that all WebSocket connections to the HTTP server go through the encrypted channel. Mixing and matching unencrypted WebSockets and @teekit/tunnel is not supported.
 - One keypair is generated per server process. No key rotation (yet) or support for load balancing across TEEs.
 - HTTP request/response bodies are buffered end-to-end; very large payloads cannot be streamed.
 - HTTP request bodies supported: string, `Uint8Array`, `ArrayBuffer`, and `ReadableStream` (no`FormData`).

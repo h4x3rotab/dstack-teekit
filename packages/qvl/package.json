@@ -1,5 +1,5 @@
 {
-  "name": "tee-channels-qvl",
+  "name": "@teekit/qvl",
   "version": "0.0.1",
   "type": "module",
   "main": "lib/index.js",

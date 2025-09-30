@@ -8,13 +8,8 @@ import {
 } from "react"
 import "./App.css"
 
-import { TunnelClient } from "tee-channels-tunnel"
-import {
-  verifyTdxBase64,
-  verifySgxBase64,
-  hex,
-  isTdxQuote,
-} from "tee-channels-qvl"
+import { TunnelClient } from "@teekit/tunnel"
+import { verifyTdxBase64, verifySgxBase64, hex, isTdxQuote } from "@teekit/qvl"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"

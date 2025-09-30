@@ -6,12 +6,10 @@ export function registerServiceWorker(target: string) {
     navigator.serviceWorker
       .register(swUrl, { type: "module", scope: "/" })
       .catch((err) => {
-        console.error("[tee-channels] Could not register ServiceWorker", err)
+        console.error("[teekit] Could not register ServiceWorker", err)
         console.log(err.stack)
       })
   } else {
-    console.error(
-      "[tee-channels] Could not find ServiceWorker API on this platform",
-    )
+    console.error("[teekit] Could not find ServiceWorker API on this platform")
   }
 }

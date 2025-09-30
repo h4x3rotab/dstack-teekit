@@ -1,1 +1,1 @@
-## tee-channels-demo
+## @teekit/demo

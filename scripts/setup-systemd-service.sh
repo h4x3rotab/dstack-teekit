@@ -1,12 +1,12 @@
 #!/bin/sh
 
-# Set up a systemd service to run the `tee-channels-demo` server on boot.
+# Set up a systemd service to run the `teekit-demo` server on boot.
 set -eu
 [ "$(id -u)" -eq 0 ] || { echo "run as root"; exit 1; }
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 WORKDIR=$(cd "$SCRIPT_DIR/.." && pwd)
-UNIT=/etc/systemd/system/tee-channels.service
+UNIT=/etc/systemd/system/teekit-demo.service
 RUN_USER=${SUDO_USER:-root}
 
 cat > "$UNIT" <<EOF
@@ -29,6 +29,6 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable tee-channels.service
-systemctl restart tee-channels.service || systemctl start tee-channels.service
+systemctl enable teekit-demo.service
+systemctl restart teekit-demo.service || systemctl start teekit-demo.service
 echo ok

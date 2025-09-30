@@ -13,7 +13,7 @@ export type QuoteData = {
 }
 
 /**
- * TEE-channels WebSocket payloads.
+ * Encrypted channel WebSocket payloads.
  */
 
 export type RAEncryptedHTTPRequest = {
