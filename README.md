@@ -1,7 +1,6 @@
 # tee-channels
 
 [![tests](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml/badge.svg)](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml)
-[![node](https://img.shields.io/node/v/tee-channels-tunnel.svg)](https://www.npmjs.com/package/tee-channels-tunnel)
 [![npm](https://img.shields.io/npm/v/tee-channels-tunnel?color=33cd56&logo=npm)](https://www.npmjs.com/package/tee-channels-tunnel)
 
 This repository implements a protocol for remotely-attested HTTPS and
@@ -12,15 +11,15 @@ terminating inside Intel TDX/SGX enclaves.
 
 Trusted execution environments make it possible to build private,
 verifiable web services, but web pages cannot verify they are
-connected to a TEE, because browsers don't expose certificate
+connected to a TEE. This is because browsers don't expose certificate
 information that proves a connection terminates inside the secured
-environment. This means proxies like Cloudflare can trivially see and
-modify traffic to TEEs forwarded through them, and anyone hosting a
-TEE app can insert their own TLS proxies to break confidentiality.
+environment, so proxies like Cloudflare can trivially see and modify
+traffic to TEEs forwarded through them, and anyone hosting a TEE app
+can insert their own TLS proxies to break confidentiality.
 
 To work around this, some TEE application hosts use their own proxy in
 front of the TEE to verify connection integrity, but this requires
-users to trust the proxy and makes setting up an application
+users to trust the new proxy, and makes setting up applications
 harder. Or, hosts may use certificate log monitoring, but this only
 happens out-of-band and does not protect the connection between the
 user and the TEE.
@@ -28,10 +27,9 @@ user and the TEE.
 Applications using encrypted TEE channels can just use public
 certificate authorities like Let's Encrypt and Cloudflare, while
 keeping the guarantee that users are directly connecting to the TEE.
-
-The `tee-channels` package is a building block, intended as part of a
+(_The `tee-channels` package is a building block, intended as part of a
 planned larger system for simplifying the deployment of TEE
-applications.
+applications._)
 
 ## Features
 
