@@ -1,36 +1,45 @@
 # tee-channels
 
-This repository implements RA-HTTPS and RA-WSS, a set of protocols for
-connecting to Secure Enclaves and Trusted Execution Environments.
+This repository implements a protocol for remotely-attested HTTPS and
+WSS channels, which web pages can use to establish secure connections
+terminating inside Intel TDX/SGX enclaves, for end-to-end TEE
+verification in the browser.
 
 ## Background
 
-By default, web pages have no way of verifying they are connected to a
-TEE, because browsers don't expose certificate information that proves
-a connection terminates inside the enclave. This breaks security and
-privacy properties of TEEs, since proxies like Cloudflare can
-trivially see and modify traffic that goes through them.
+Trusted execution environments make it possible to build private,
+verifiable web services, but web pages cannot verify they are
+connected to a TEE, because browsers don't expose certificate
+information that proves a connection terminates inside the secured
+environment. This means proxies like Cloudflare can trivially see and
+modify traffic to TEEs forwarded through them, and anyone hosting a
+TEE app can insert their own TLS proxies to break confidentiality.
 
-To work around this, TEE application hosts typically insert a proxy in
-front of the TEE that verifies the connection into the enclave, but this
-just moves trust assumptions to the proxy instead.
+To work around this, some TEE application hosts use their own proxy in
+front of the TEE to verify the connection, but this requires users to
+trust the proxy and makes setting up an application harder. Or, hosts
+can use certificate log monitoring to ensure HTTPS certificates for a
+hostname are only issued to the TEE's internal public keys, but
+monitoring happens out-of-band and does not protect the connection
+between the user and the TEE.
 
-This repository provides a library that web pages can use to establish a
-secure channel into Intel TDX/SGX, that authenticates the TEE and
-ensures it's running up-to-date firmware, entirely from within the browser.
-This makes it possible to build browser applications that connect to a
-verifiable, privacy-preserving backend.
+Applications using encrypted TEE channels can just use public
+certificate authorities and proxies like Let's Encrypt and Cloudflare,
+and retain the guarantee that users are directly connecting to the
+TEE.
 
-## Components
+## Features
 
-- tee-channels-tunnel: Establishes encrypted channels into TEEs.
+- tee-channels-tunnel:
   - Encrypted HTTP requests via a `fetch`-compatible API
   - Encrypted WebSockets via a `WebSocket`-compatible API
   - ServiceWorker for upgrading HTTP requests from a browser page
     to use the encrypted channel
-- tee-channels-qvl: WebCrypto-based SGX/TDX quote verification library
-  - Validates the full chain of trust from the root CA, down to report binding
-  - Includes embedded CRL/TCB validation that can be used from your browser
+- tee-channels-qvl:
+  - WebCrypto-based SGX/TDX quote verification library
+  - Validates the full chain of trust from the root CA, down to binding
+    the public key of the encrypted channel in `report_data`
+  - Includes CRL/TCB validation that can be (mostly) used from your browser
 - tee-channels-demo:
   - A [demo application](https://tee-channels.vercel.app/) that supports
     HTTPS and WSS requests over the encrypted channel, both with and without
@@ -39,15 +48,15 @@ verifiable, privacy-preserving backend.
 ## Usage
 
 On the client, create a `TunnelClient()` object. You should switch out
-Node.js `fetch` and `WebSocket` instances for our `fetch` and
+unencrypted Node.js `fetch` and `WebSocket` instances for our `fetch` and
 `WebSocket` wrappers, exposed on the `TunnelClient()`.
 
 It is your responsibility to configure TunnelClient with the expected
 `mrtd` and `report_data` measurements, certificate revocation lists,
-and a verifyTcb() function if you wish to check for freshness of the TCB.
+verify the TCB manually inside any custom quote validator.
 
-Your client will validate these before opening a connection, ensuring
-that all traffic terminates inside the trusted execution environment.
+Your client will validate all measurements, quote signatures, and
+additional CRL/TCB info before opening a connection.
 
 ```ts
 import { TunnelClient } from "tee-channels-tunnel"
@@ -65,7 +74,7 @@ async function main() {
     mrtd: expectedMrtd,
     report_data: expectedReportData,
     crl: [], // certificate revocation list
-    verifyTcb: () => true, // check for TCB freshness
+    verifyTcb: ({ ... }) => true, // check for TCB freshness
     // sgx: true // defaults to TDX otherwise
   })
 
@@ -144,11 +153,12 @@ const baseUrl = "http://127.0.0.1:3000" // your TunnelServer origin
 registerServiceWorker(baseUrl)
 ```
 
-Note that different browsers vary in their support of ServiceWorkers.
-Some browsers may block ServiceWorkers from being installed. By
-default, they intercept link clicks, location.assign() calls,
-subresource requests, and fetch() / XMLHttpRequest requests (but not
-WebSockets).
+Note that different browsers vary in their support of ServiceWorkers,
+and some browsers may block ServiceWorkers from being installed.
+
+By default, ServiceWorkers intercept link clicks, location.assign()
+calls, subresource requests, and fetch() / XMLHttpRequest requests
+(but not WebSockets).
 
 ## Demo
 
@@ -214,7 +224,8 @@ import {
 class TunnelServer {
   static initialize(
     app: Express,
-    getQuote: (x25519PublicKey: Uint8Array) => Promise<Uint8Array> | Uint8Array,
+    getQuote: (x25519PublicKey: Uint8Array) => Awaitable<Uint8Array>,
+    config?: { heartbeatInterval?: number, heartbeatTimeout?: number }
   ): Promise<TunnelServer>
   server: http.Server                // call `server.listen(...)` to bind a port.
   wss: ServerRAMockWebSocketServer   // emits "connection" and manages `ServerRAMockWebSocket` clients
@@ -226,7 +237,8 @@ class TunnelClient {
     config: {
       mrtd?: string;
       report_data?: string;
-      match?: (quote) => boolean;
+      customVerifyQuote?: (quote) => Awaitable<boolean>
+      customVerifyX25519Binding?: (client: TunnelClient) => Awaitable<boolean>
       sgx?: boolean
     }
   ): Promise<TunnelClient>
