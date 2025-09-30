@@ -4,26 +4,25 @@
 [![node](https://img.shields.io/node/v/@teekit/qvl.svg)](https://www.npmjs.com/package/@teekit/qvl)
 [![npm](https://img.shields.io/npm/v/@teekit/tunnel?color=33cd56&logo=npm)](https://www.npmjs.com/package/@teekit/tunnel)
 
-A single-shot, end-to-end verifiable TEE stack.
+A minimal, end-to-end verifiable TEE stack.
 
 ## Background
 
 Trusted execution environments make it possible to build private and
 verifiable web services, but one issue that makes this harder is that
 web pages cannot natively verify that they're connected to a TEE.
-
-Browsers don't expose X.509 certificate extensions that can be
-used to prove a connection terminates inside the secured environment,
-so proxies like Cloudflare can trivially see and modify traffic to
-TEEs forwarded through them. Anyone hosting a TEE app can easily
-insert their own TLS proxy in front of it, breaking privacy and
-extracting session data that lets them impersonate the user.
+Browsers don't expose X.509 certificate extensions that can be used to
+prove a connection terminates inside the secured environment, so
+proxies like Cloudflare can trivially see and modify traffic to TEEs
+forwarded through them. Anyone hosting a TEE app can easily insert
+their own TLS proxy in front of it, breaking privacy and extracting
+session data that lets them impersonate the user.
 
 To work around this, some TEE application hosts implement their own
-proxy in front of the TEE, but this simply moves trust to a different
-proxy. Hosts may also use certificate log monitoring to boost security,
-but this happens out-of-band and doesn't directly protect the
-connection between the user and the TEE.
+proxy in front of the TEE, but this reintroduces trust assumptions
+around the proxy. Hosts can also use certificate log monitoring to
+boost security, but this happens out-of-band and doesn't directly
+protect the connection between the user and the TEE.
 
 This repository implements protocols for remotely-attested HTTPS and
 WSS channels, which web pages can use to establish secure connections
@@ -35,7 +34,7 @@ and use public certificate authorities like Let's Encrypt and
 Cloudflare without custom configuration. Developers can also host copies
 of the same application on IPFS or other immutable cloud services.
 
-## Features
+## Components
 
 - @teekit/tunnel:
   - Establishes tunneled connections to a TEE through an encrypted
