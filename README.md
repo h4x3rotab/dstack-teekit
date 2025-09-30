@@ -1,5 +1,9 @@
 # tee-channels
 
+[![tests](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml/badge.svg)](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/tee-channels-tunnel.svg)](https://www.npmjs.com/package/tee-channels-tunnel)
+[![npm](https://img.shields.io/npm/v/tee-channels-tunnel?color=33cd56&logo=npm)](https://www.npmjs.com/package/tee-channels-tunnel)
+
 This repository implements a protocol for remotely-attested HTTPS and
 WSS channels, which web pages can use to establish secure connections
 terminating inside Intel TDX/SGX enclaves.
@@ -22,9 +26,8 @@ happens out-of-band and does not protect the connection between the
 user and the TEE.
 
 Applications using encrypted TEE channels can just use public
-certificate authorities and proxies like Let's Encrypt and Cloudflare,
-and retain the guarantee that users are directly connecting to the
-TEE.
+certificate authorities like Let's Encrypt and Cloudflare, while
+keeping the guarantee that users are directly connecting to the TEE.
 
 The `tee-channels` package is a building block, intended as part of a
 planned larger system for simplifying the deployment of TEE
