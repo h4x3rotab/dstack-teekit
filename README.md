@@ -2,8 +2,7 @@
 
 This repository implements a protocol for remotely-attested HTTPS and
 WSS channels, which web pages can use to establish secure connections
-terminating inside Intel TDX/SGX enclaves, for end-to-end TEE
-verification in the browser.
+terminating inside Intel TDX/SGX enclaves.
 
 ## Background
 
@@ -16,17 +15,20 @@ modify traffic to TEEs forwarded through them, and anyone hosting a
 TEE app can insert their own TLS proxies to break confidentiality.
 
 To work around this, some TEE application hosts use their own proxy in
-front of the TEE to verify the connection, but this requires users to
-trust the proxy and makes setting up an application harder. Or, hosts
-can use certificate log monitoring to ensure HTTPS certificates for a
-hostname are only issued to the TEE's internal public keys, but
-monitoring happens out-of-band and does not protect the connection
-between the user and the TEE.
+front of the TEE to verify connection integrity, but this requires
+users to trust the proxy and makes setting up an application
+harder. Or, hosts may use certificate log monitoring, but this only
+happens out-of-band and does not protect the connection between the
+user and the TEE.
 
 Applications using encrypted TEE channels can just use public
 certificate authorities and proxies like Let's Encrypt and Cloudflare,
 and retain the guarantee that users are directly connecting to the
 TEE.
+
+The `tee-channels` package is a building block, intended as part of a
+planned larger system for simplifying the deployment of TEE
+applications.
 
 ## Features
 
