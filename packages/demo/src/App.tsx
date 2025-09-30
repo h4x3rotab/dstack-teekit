@@ -9,7 +9,12 @@ import {
 import "./App.css"
 
 import { TunnelClient } from "tee-channels-tunnel"
-import { verifyTdxBase64, verifySgxBase64, hex, isTdxQuote } from "tee-channels-qvl"
+import {
+  verifyTdxBase64,
+  verifySgxBase64,
+  hex,
+  isTdxQuote,
+} from "tee-channels-qvl"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
@@ -22,7 +27,7 @@ import {
 export const baseUrl =
   document.location.hostname === "localhost"
     ? "https://ra-https.canvas.xyz"
-    : document.location.hostname === "tee-channels.vercel.app"
+    : document.location.hostname.endsWith(".vercel.app")
       ? "https://ra-https.canvas.xyz"
       : `${document.location.protocol}//${document.location.hostname}`
 

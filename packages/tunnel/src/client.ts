@@ -35,16 +35,14 @@ import {
   isRAEncryptedServerEvent,
   isRAEncryptedWSMessage,
 } from "./typeguards.js"
-import { generateRequestId } from "./utils/client.js"
+import { generateRequestId, Awaitable } from "./utils/client.js"
 import { ClientRAMockWebSocket } from "./ClientRAWebSocket.js"
 
 export type TunnelClientConfig = {
   mrtd?: string
   report_data?: string
-  customVerifyQuote?: (quote: TdxQuote | SgxQuote) => boolean | Promise<boolean>
-  customVerifyX25519Binding?: (
-    client: TunnelClient,
-  ) => boolean | Promise<boolean>
+  customVerifyQuote?: (quote: TdxQuote | SgxQuote) => Awaitable<boolean>
+  customVerifyX25519Binding?: (client: TunnelClient) => Awaitable<boolean>
   sgx?: boolean // default to TDX
 }
 
@@ -56,9 +54,9 @@ const debug = createDebug("tee-channels:TunnelClient")
  * const enc = await TunnelClient.initialize(baseUrl, {
  *   mtrd: 'any',
  *   report_data: '0000....',
- *   match: (quote) => {
- *     return true // custom validation logic goes here
- *   }
+ *   customVerifyQuote: (quote) => {
+ *     return true // additional custom validation logic goes here
+ *   },
  * })
  *
  * enc.fetch("https://...")
