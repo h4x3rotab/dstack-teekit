@@ -223,7 +223,7 @@ self-signed certificate (which will produce a warning in browsers and
 may break some features).
 
 To use Let's Encrypt with your domain, configure it with an A record
-to point to your TDX VM's IP, and then run, from the ra-https repo root:
+to point to your TDX VM's IP, and then run, from this repo's workspace root:
 
 ```
 scripts/setup-nginx-certbot.sh <example.com>
@@ -244,11 +244,11 @@ scripts/setup-systemd-service.sh
 Create a Intel TDX CLI config.json inside `packages/demo`, and then restart the service:
 
 ```
-systemctl restart ra-https
+systemctl restart tee-channels
 ```
 
 To view logs:
 
 ```
-journalctl -uf ra-https
+journalctl -uf tee-channels
 ```

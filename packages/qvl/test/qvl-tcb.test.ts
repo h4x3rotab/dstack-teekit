@@ -9,7 +9,7 @@ import {
   IntelTcbInfo,
   VerifyConfig,
   isTdxQuote,
-} from "ra-https-qvl"
+} from "tee-channels-qvl"
 
 const BASE_TIME = Date.parse("2025-09-29T23:00:00Z")
 const SAMPLE_DIR = "test/tcbInfo"

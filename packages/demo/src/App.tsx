@@ -8,8 +8,8 @@ import {
 } from "react"
 import "./App.css"
 
-import { TunnelClient } from "ra-https-tunnel"
-import { verifyTdxBase64, verifySgxBase64, hex, isTdxQuote } from "ra-https-qvl"
+import { TunnelClient } from "tee-channels-tunnel"
+import { verifyTdxBase64, verifySgxBase64, hex, isTdxQuote } from "tee-channels-qvl"
 
 import { Message, WebSocketMessage, ChatMessage, UptimeData } from "./types.js"
 import { getStoredUsername } from "./utils.js"
@@ -22,7 +22,7 @@ import {
 export const baseUrl =
   document.location.hostname === "localhost"
     ? "https://ra-https.canvas.xyz"
-    : document.location.hostname === "ra-https.vercel.app"
+    : document.location.hostname === "tee-channels.vercel.app"
       ? "https://ra-https.canvas.xyz"
       : `${document.location.protocol}//${document.location.hostname}`
 

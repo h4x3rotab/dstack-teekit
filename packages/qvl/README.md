@@ -1,6 +1,6 @@
-## ra-https-qvl
+## tee-channels-qvl
 
-ra-https-qvl is a lightweight, WebCrypto-based SGX/TDX quote verification library written in TypeScript (ESM). It provides full chain-of-trust validation from the Intel SGX Root CA, through quoting enclave checks, down to quote signature verification.
+tee-channels-qvl is a lightweight, WebCrypto-based SGX/TDX quote verification library written in TypeScript (ESM). It provides full chain-of-trust validation from the Intel SGX Root CA, through quoting enclave checks, down to quote signature verification.
 
 ## Features
 
@@ -20,7 +20,7 @@ ra-https-qvl is a lightweight, WebCrypto-based SGX/TDX quote verification librar
 ## Quickstart
 
 ```ts
-import { verifyTdx } from "ra-https-qvl"
+import { verifyTdx } from "tee-channels-qvl"
 
 const ok = await verifyTdx(quote, {
   date: Date.now(),     // verification time (ms)
@@ -29,7 +29,7 @@ const ok = await verifyTdx(quote, {
 ```
 
 ```ts
-import { verifySgx } from "ra-https-qvl"
+import { verifySgx } from "tee-channels-qvl"
 
 const ok = await verifySgx(quoteBytes, {
   date: Date.now(),
@@ -42,7 +42,7 @@ If cert_data is missing in the quote, you can provide the leaf, intermediate, an
 You can also provide alternative pinned root certificates. We embed the Intel SGX Root CA and use it as a default otherwise.
 
 ```ts
-import { verifyTdx, QV_X509Certificate } from "ra-https-qvl"
+import { verifyTdx, QV_X509Certificate } from "tee-channels-qvl"
 
 const rootPem = "-----BEGIN CERTIFICATE-----..." // Intel SGX Root CA PEM
 const intermediatePem = "-----BEGIN CERTIFICATE-----..."

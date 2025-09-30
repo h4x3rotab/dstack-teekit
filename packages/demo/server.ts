@@ -10,25 +10,25 @@ import {
 } from "./types.js"
 
 /* ********************************************************************************
- * Begin RA-HTTPS tunnel code.
+ * Begin tee-channels tunnel code.
  * ******************************************************************************** */
 import {
   TunnelServer,
   ServerRAMockWebSocket,
   encryptedOnly,
   QuoteData,
-} from "ra-https-tunnel"
+} from "tee-channels-tunnel"
 import fs from "node:fs"
 import { exec } from "node:child_process"
 import { base64 } from "@scure/base"
-import { hex } from "ra-https-qvl"
+import { hex } from "tee-channels-qvl"
 
 async function getQuote(x25519PublicKey: Uint8Array): Promise<QuoteData> {
   return await new Promise<QuoteData>(async (resolve, reject) => {
     // If config.json isn't set up, return a sample quote
     if (!fs.existsSync("config.json")) {
       console.log(
-        "[ra-https-demo] TDX config.json not found, serving sample quote",
+        "[tee-channels-demo] TDX config.json not found, serving sample quote",
       )
       const { tappdV4Base64 } = await import("./shared/samples.js")
       resolve({
@@ -38,7 +38,9 @@ async function getQuote(x25519PublicKey: Uint8Array): Promise<QuoteData> {
     }
 
     // Otherwise, get a quote from the SEAM (requires root)
-    console.log("[ra-https-demo] Getting a quote for " + hex(x25519PublicKey))
+    console.log(
+      "[tee-channels-demo] Getting a quote for " + hex(x25519PublicKey),
+    )
     const userDataB64 = base64.encode(x25519PublicKey)
     const cmd = `trustauthority-cli evidence --tdx --user-data '${userDataB64}' -c config.json`
     exec(cmd, (err, stdout) => {
@@ -68,7 +70,7 @@ const app = express()
 const { server, wss } = await TunnelServer.initialize(app, getQuote)
 
 /* ********************************************************************************
- * End RA-HTTPS tunnel code.
+ * End tee-channels tunnel code.
  * ******************************************************************************** */
 
 app.use(cors())
@@ -92,7 +94,9 @@ app.get("/uptime", encryptedOnly(), (_req, res) => {
 
   res.json({
     uptime: {
-      formatted: `${uptimeHours ? uptimeHours + "h" : ""} ${minutes}m ${seconds}s`,
+      formatted: `${
+        uptimeHours ? uptimeHours + "h" : ""
+      } ${minutes}m ${seconds}s`,
     },
   })
 })
@@ -107,7 +111,7 @@ app.post("/increment", encryptedOnly(), (_req, res) => {
 })
 
 wss.on("connection", (ws: WebSocket) => {
-  console.log("[ra-https-demo] Client connected")
+  console.log("[tee-channels-demo] Client connected")
 
   // Send message backlog to new client
   const hiddenCount = Math.max(0, totalMessageCount - messages.length)
@@ -152,12 +156,12 @@ wss.on("connection", (ws: WebSocket) => {
         })
       }
     } catch (error) {
-      console.error("[ra-https-demo] Error parsing message:", error)
+      console.error("[tee-channels-demo] Error parsing message:", error)
     }
   })
 
   ws.on("close", () => {
-    console.log("[ra-https-demo] Client disconnected")
+    console.log("[tee-channels-demo] Client disconnected")
   })
 })
 
@@ -167,6 +171,6 @@ const PORT = process.env.PORT || 3001
 
 server.listen(PORT, () => {
   console.log(
-    `[ra-https-demo] WebSocket server running on http://localhost:${PORT}`,
+    `[tee-channels-demo] WebSocket server running on http://localhost:${PORT}`,
   )
 })

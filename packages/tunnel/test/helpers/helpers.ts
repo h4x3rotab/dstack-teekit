@@ -2,10 +2,10 @@ import express, { Request, Response } from "express"
 import type { AddressInfo } from "node:net"
 import sodium from "libsodium-wrappers"
 
-import { TunnelClient, TunnelServer } from "ra-https-tunnel"
+import { TunnelClient, TunnelServer } from "tee-channels-tunnel"
 import { tappdV4Base64, trusteeV5Base64, occlumSgxBase64 } from "./samples.js"
 import { base64 } from "@scure/base"
-import { hex, parseTdxQuote } from "ra-https-qvl"
+import { hex, parseTdxQuote } from "tee-channels-qvl"
 
 // Ensure timers don't keep `npx ava --watch` alive (client sets 30s timeouts)
 const originalSetTimeout = setTimeout

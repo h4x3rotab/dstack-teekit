@@ -1,4 +1,4 @@
-# ra-https
+# tee-channels
 
 This repository implements RA-HTTPS and RA-WSS, a set of protocols for
 connecting to Secure Enclaves and Trusted Execution Environments.
@@ -23,16 +23,16 @@ verifiable, privacy-preserving backend.
 
 ## Components
 
-- ra-https-tunnel: Establishes encrypted channels into TEEs.
+- tee-channels-tunnel: Establishes encrypted channels into TEEs.
   - Encrypted HTTP requests via a `fetch`-compatible API
   - Encrypted WebSockets via a `WebSocket`-compatible API
   - ServiceWorker for upgrading HTTP requests from a browser page
     to use the encrypted channel
-- ra-https-qvl: WebCrypto-based SGX/TDX quote verification library
+- tee-channels-qvl: WebCrypto-based SGX/TDX quote verification library
   - Validates the full chain of trust from the root CA, down to report binding
   - Includes embedded CRL/TCB validation that can be used from your browser
-- ra-https-demo:
-  - A [demo application](https://ra-https.vercel.app/) that supports
+- tee-channels-demo:
+  - A [demo application](https://tee-channels.vercel.app/) that supports
     HTTPS and WSS requests over the encrypted channel, both with and without
     the embedded ServiceWorker.
 
@@ -50,8 +50,8 @@ Your client will validate these before opening a connection, ensuring
 that all traffic terminates inside the trusted execution environment.
 
 ```ts
-import { TunnelClient } from "ra-https-tunnel"
-import { hex, parseTdxQuote } from "ra-https-qvl"
+import { TunnelClient } from "tee-channels-tunnel"
+import { hex, parseTdxQuote } from "tee-channels-qvl"
 
 async function main() {
   const origin = "http://127.0.0.1:3000"
@@ -88,7 +88,7 @@ arbitrary backends through Nginx.
 
 ```ts
 import express from "express"
-import { TunnelServer } from "ra-https-tunnel"
+import { TunnelServer } from "tee-channels-tunnel"
 
 async function main() {
   const app = express()
@@ -106,7 +106,7 @@ async function main() {
   })
 
   tunnelServer.server.listen(3000, () => {
-    console.log("ra-https service listening on :3000")
+    console.log("tee-channels service listening on :3000")
   })
 }
 
@@ -120,13 +120,13 @@ HTTP GET/POST requests to go over the encrypted channel to your
 To do this, first add the ServiceWorker plugin to your bundler. You
 can use an included Vite plugin to handle this, or manually serve
 `__ra-serviceworker__.js` at your web root from
-`node_modules/ra-https-tunnel/lib/sw.build.js`::
+`node_modules/tee-channels-tunnel/lib/sw.build.js`::
 
 ```js
 // vite.config.js
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
-import { includeRaServiceWorker } from "ra-https-tunnel/sw"
+import { includeRaServiceWorker } from "tee-channels-tunnel/sw"
 
 export default defineConfig({
   plugins: [react(), includeRaServiceWorker()],
@@ -138,7 +138,7 @@ tunnel origin:
 
 ```ts
 // src/main.tsx (or similar)
-import { registerServiceWorker } from "ra-https-tunnel/register"
+import { registerServiceWorker } from "tee-channels-tunnel/register"
 
 const baseUrl = "http://127.0.0.1:3000" // your TunnelServer origin
 registerServiceWorker(baseUrl)
@@ -180,7 +180,7 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
    `ws(s)://<host>:<port>/__ra__`.
 2. Server immediately sends `server_kx` with an X25519 public key and
    a TDX/SGX attestation quote.
-3. Client verifies the quote (using `ra-https-qvl`), optionally
+3. Client verifies the quote (using `tee-channels-qvl`), optionally
    enforces `mrtd`/`report_data` or a custom matcher, generates a
    symmetric key, and sends it sealed to the server via `client_kx`
    (libsodium `crypto_box_seal`).
@@ -209,7 +209,7 @@ import {
   ServerRAMockWebSocket,
   ServerRAMockWebSocketServer,
   ClientRAMockWebSocket,
-} from "ra-https-tunnel"
+} from "tee-channels-tunnel"
 
 class TunnelServer {
   static initialize(

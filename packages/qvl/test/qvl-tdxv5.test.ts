@@ -7,8 +7,8 @@ import {
   _verifyTdx,
   getTdx15SignedRegion,
   QV_X509Certificate,
-} from "ra-https-qvl"
-import { normalizeSerialHex } from "ra-https-qvl/utils"
+} from "tee-channels-qvl"
+import { normalizeSerialHex } from "tee-channels-qvl/utils"
 import {
   rebuildTdxQuoteWithCertData,
   tamperPemSignature,

@@ -7,8 +7,11 @@ import {
   _verifySgx,
   parseSgxQuote,
   getSgxSignedRegion,
-} from "ra-https-qvl"
-import { normalizeSerialHex, extractPemCertificates } from "ra-https-qvl/utils"
+} from "tee-channels-qvl"
+import {
+  normalizeSerialHex,
+  extractPemCertificates,
+} from "tee-channels-qvl/utils"
 import {
   rebuildSgxQuoteWithCertData,
   tamperPemSignature,

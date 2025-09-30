@@ -39,7 +39,7 @@ import {
   ServerRAMockWebSocketServer,
 } from "./ServerRAWebSocket.js"
 
-const debug = createDebug("ra-https:TunnelServer")
+const debug = createDebug("tee-channels:TunnelServer")
 
 type TunnelServerConfig = {
   heartbeatInterval?: number

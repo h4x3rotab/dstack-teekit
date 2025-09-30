@@ -5,7 +5,7 @@ import { WebSocket } from "ws"
 import sodium from "libsodium-wrappers"
 import { encode, decode } from "cbor-x"
 
-import { TunnelClient, TunnelServer, encryptedOnly } from "ra-https-tunnel"
+import { TunnelClient, TunnelServer, encryptedOnly } from "tee-channels-tunnel"
 import { loadQuote, startTunnelApp, stopTunnel } from "./helpers/helpers.js"
 
 test.serial(

@@ -6,11 +6,11 @@ import {
   parseSgxQuote,
   verifyPCKChain,
   QV_X509Certificate,
-} from "ra-https-qvl"
+} from "tee-channels-qvl"
 import {
   extractPemCertificates,
   computeCertSha256Hex,
-} from "ra-https-qvl/utils"
+} from "tee-channels-qvl/utils"
 
 export function pemToDer(pem: string): Buffer {
   const b64 = pem

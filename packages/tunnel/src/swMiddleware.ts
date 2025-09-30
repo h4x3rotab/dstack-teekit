@@ -5,8 +5,9 @@ import type express from "express"
 
 export function includeRaServiceWorker() {
   // Look for the serviceworker js bundle
-  const fromRoot = "node_modules/ra-https-tunnel/lib/sw.build.js"
-  const fromSubpackage = "../../node_modules/ra-https-tunnel/lib/sw.build.js"
+  const fromRoot = "node_modules/tee-channels-tunnel/lib/sw.build.js"
+  const fromSubpackage =
+    "../../node_modules/tee-channels-tunnel/lib/sw.build.js"
 
   let path
   if (existsSync(resolve(process.cwd(), fromRoot))) {
@@ -15,7 +16,7 @@ export function includeRaServiceWorker() {
     path = resolve(process.cwd(), fromSubpackage)
   } else {
     throw new Error(
-      "ra-https-tunnel not found, have you installed the package?",
+      "tee-channels-tunnel not found, have you installed the package?",
     )
   }
 
