@@ -4,12 +4,13 @@ import path from "node:path"
 import { base64 as scureBase64 } from "@scure/base"
 
 import {
+  IntelTcbInfo,
+  isTdxQuote,
+  VerifyConfig,
   verifySgx,
   verifyTdx,
-  IntelTcbInfo,
-  VerifyConfig,
-  isTdxQuote,
 } from "tee-channels-qvl"
+import { getTcbStatus, isTcbInfoFresh, TcbRef } from "tee-channels-qvl/tcb"
 
 const BASE_TIME = Date.parse("2025-09-29T23:00:00Z")
 const SAMPLE_DIR = "test/sampleTcbInfos"
@@ -40,97 +41,27 @@ async function fetchTcbInfo(
   }
 }
 
-type TcbRef = { status?: string; tcbInfoFresh?: boolean; fmspc?: string }
-
-// Builds a verifyTcb hook that captures the status & freshness
-function getVerifyTcb(stateRef: TcbRef) {
+// Builds a verifyTcb hook that captures the status & freshness in TcbRef
+export function getVerifyTcb(stateRef: TcbRef, baseTime?: number) {
   type VerifyArgs = Parameters<VerifyConfig["verifyTcb"]>[0]
-  return async ({
-    fmspc,
-    cpuSvn,
-    pceSvn,
-    quote,
-  }: VerifyArgs): Promise<boolean> => {
+  return async ({ fmspc, cpuSvn, pceSvn, quote }: VerifyArgs) => {
     // Fetch TCB info
     const isTdx = isTdxQuote(quote)
     const tcbInfo = await fetchTcbInfo(fmspc, isTdx)
-    const now = BASE_TIME
+    const now = baseTime ?? +new Date()
 
-    // Determine the TCB status by finding the first Intel TCB level
-    // whose requirements are satisfied by the quote:
-    // - PCE SVN must be >= the level's pcesvn (if provided)
-    // - Support both legacy SGX v2 keys (sgxtcbcompNNsvn) and v3 array-form
-    //   sgxtcbcomponents; for TDX also check tdxtcbcomponents against tee_tcb_svn
-    let statusFound = "OutOfDate"
-    for (const level of tcbInfo.tcbInfo.tcbLevels) {
-      const pceOk =
-        typeof level.tcb.pcesvn === "number" ? pceSvn >= level.tcb.pcesvn : true
-
-      let cpuOk = true
-
-      if (!isTdx) {
-        // SGX v2-style keys: sgxtcbcompNNsvn
-        for (let comp = 1; comp <= 16; comp++) {
-          const key = `sgxtcbcomp${String(comp).padStart(2, "0")}svn`
-          if (Object.prototype.hasOwnProperty.call(level.tcb, key)) {
-            if (cpuSvn[comp - 1] < (level.tcb as any)[key]) {
-              cpuOk = false
-              break
-            }
-          }
-        }
-
-        // SGX v3-style array: sgxtcbcomponents
-        if (cpuOk && Array.isArray(level.tcb.sgxtcbcomponents)) {
-          const arr = level.tcb.sgxtcbcomponents as Array<{
-            svn?: number
-          }>
-          for (let i = 0; i < arr.length; i++) {
-            const req = arr[i]
-            if (req && typeof req.svn === "number") {
-              if ((cpuSvn[i] ?? 0) < req.svn) {
-                cpuOk = false
-                break
-              }
-            }
-          }
-        }
-      } else {
-        // TDX components array: tdxtcbcomponents (compare against tee_tcb_svn)
-        if (cpuOk && Array.isArray(level.tcb.tdxtcbcomponents)) {
-          const arr = level.tcb.tdxtcbcomponents
-          for (let i = 0; i < arr.length; i++) {
-            const req = arr[i]
-            if (req && typeof req.svn === "number") {
-              if ((cpuSvn[i] ?? 0) < req.svn) {
-                cpuOk = false
-                break
-              }
-            }
-          }
-        }
-      }
-
-      if (cpuOk && pceOk) {
-        statusFound = level.tcbStatus
-        break
-      }
-    }
-
-    // Also verify tcbInfo freshness
-    const tcbInfoFresh =
-      Date.parse(tcbInfo.tcbInfo.issueDate) <= now &&
-      now <= Date.parse(tcbInfo.tcbInfo.nextUpdate)
+    // Determine the TCB status and check freshness
+    const statusFound = getTcbStatus(tcbInfo, cpuSvn, pceSvn, isTdx)
+    const tcbInfoFresh = isTcbInfoFresh(tcbInfo, now)
 
     stateRef.fmspc = fmspc
     stateRef.status = statusFound
     stateRef.tcbInfoFresh = tcbInfoFresh
 
-    const valid =
+    return (
       tcbInfoFresh &&
       (statusFound === "UpToDate" || statusFound === "ConfigurationNeeded")
-
-    return valid
+    )
   }
 }
 
@@ -152,14 +83,14 @@ async function assertTcb(
   const quote: Uint8Array = _b64
     ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
     : _json
-      ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
-      : fs.readFileSync(path)
+    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+    : fs.readFileSync(path)
 
   const stateRef: TcbRef = {}
   const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {
     date: BASE_TIME,
     crls: [],
-    verifyTcb: getVerifyTcb(stateRef),
+    verifyTcb: getVerifyTcb(stateRef, BASE_TIME),
   })
 
   t.is(valid, ok)

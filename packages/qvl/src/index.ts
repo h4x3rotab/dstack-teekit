@@ -12,6 +12,7 @@ export {
   getExpectedReportDataFromUserdata,
   isUserdataBound,
 } from "./utils.js"
+export { getTcbStatus, isTcbInfoFresh, verifyTcb } from "./tcb.js"
 
 export * from "./verifyTdx.js"
 export * from "./verifySgx.js"

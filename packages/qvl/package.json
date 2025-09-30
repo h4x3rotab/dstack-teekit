@@ -15,6 +15,11 @@
       "types": "./lib/utils.d.ts",
       "import": "./lib/utils.js",
       "default": "./lib/utils.js"
+    },
+    "./tcb": {
+      "types": "./lib/tcb.d.ts",
+      "import": "./lib/tcb.js",
+      "default": "./lib/tcb.js"
     }
   },
   "scripts": {
