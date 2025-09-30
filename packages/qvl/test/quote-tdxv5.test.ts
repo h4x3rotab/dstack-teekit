@@ -19,7 +19,7 @@ import {
 const BASE_TIME = Date.parse("2025-09-01")
 
 test.serial("Verify a V5 TDX quote from Trustee", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { header, body } = parseTdxQuote(quote)
   const { fmspc, pcesvn } = await _verifyTdx(quote)
 
@@ -53,12 +53,12 @@ async function getTrusteeCertPems(): Promise<{
   root: string
   all: string[]
 }> {
-  const quote = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   return getCertPemsFromQuote(quote, { tdx: true })
 }
 
 test.serial("Reject a V5 TDX quote, missing root cert", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const err = await t.throwsAsync(
     async () =>
       await verifyTdx(buf, {
@@ -73,7 +73,7 @@ test.serial("Reject a V5 TDX quote, missing root cert", async (t) => {
 })
 
 test.serial("Reject a V5 TDX quote, missing intermediate cert", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { leaf, root } = await getTrusteeCertPems()
   const noEmbedded = rebuildTdxQuoteWithCertData(buf, Buffer.alloc(0))
   const err = await t.throwsAsync(
@@ -90,7 +90,7 @@ test.serial("Reject a V5 TDX quote, missing intermediate cert", async (t) => {
 })
 
 test.serial("Reject a V5 TDX quote, missing leaf cert", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { intermediate, root } = await getTrusteeCertPems()
   const noEmbedded = rebuildTdxQuoteWithCertData(buf, Buffer.alloc(0))
   const err = await t.throwsAsync(
@@ -107,7 +107,7 @@ test.serial("Reject a V5 TDX quote, missing leaf cert", async (t) => {
 })
 
 test.serial("Reject a V5 TDX quote, revoked root cert", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { root } = await getTrusteeCertPems()
   const rootSerial = normalizeSerialHex(
     new QV_X509Certificate(root).serialNumber,
@@ -126,7 +126,7 @@ test.serial("Reject a V5 TDX quote, revoked root cert", async (t) => {
 })
 
 test.serial("Reject a V5 TDX quote, invalid root self-signature", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { leaf, intermediate, root } = await getTrusteeCertPems()
   const tamperedRoot = tamperPemSignature(root)
   const noEmbedded = rebuildTdxQuoteWithCertData(buf, Buffer.alloc(0))
@@ -145,7 +145,7 @@ test.serial("Reject a V5 TDX quote, invalid root self-signature", async (t) => {
 
 test.serial("Reject a V5 TDX quote, incorrect QE signature", async (t) => {
   const original = Buffer.from(
-    fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+    fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
   )
   const signedLen = getTdx15SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
@@ -179,7 +179,7 @@ test.serial("Reject a V5 TDX quote, incorrect QE signature", async (t) => {
 
 test.serial("Reject a V5 TDX quote, incorrect QE binding", async (t) => {
   const original = Buffer.from(
-    fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+    fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
   )
   const signedLen = getTdx15SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
@@ -213,7 +213,7 @@ test.serial("Reject a V5 TDX quote, incorrect QE binding", async (t) => {
 
 test.serial("Reject a V5 TDX quote, incorrect TD signature", async (t) => {
   const original = Buffer.from(
-    fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+    fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
   )
   const signedLen = getTdx15SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
@@ -247,7 +247,7 @@ test.serial("Reject a V5 TDX quote, incorrect TD signature", async (t) => {
 
 test.serial("Reject a V5 TDX quote, unsupported cert_data_type", async (t) => {
   const original = Buffer.from(
-    fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+    fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
   )
   const signedLen = getTdx15SignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
@@ -288,7 +288,7 @@ test.serial("Reject a V5 TDX quote, unsupported cert_data_type", async (t) => {
 test.serial(
   "Reject a V5 TDX quote, missing certdata (no fallback)",
   async (t) => {
-    const base = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+    const base = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
     const noEmbedded = rebuildTdxQuoteWithCertData(base, Buffer.alloc(0))
     const err = await t.throwsAsync(
       async () =>
@@ -306,7 +306,7 @@ test.serial(
 test.serial(
   "Reject a V5 TDX quote, cert chain not yet valid (too early)",
   async (t) => {
-    const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+    const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
     const early = Date.parse("2000-01-01")
     const err = await t.throwsAsync(
       async () =>
@@ -320,7 +320,7 @@ test.serial(
 test.serial(
   "Reject a V5 TDX quote, cert chain expired (too late)",
   async (t) => {
-    const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+    const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
     const late = Date.parse("2100-01-01")
     const err = await t.throwsAsync(
       async () =>
@@ -332,7 +332,7 @@ test.serial(
 )
 
 test.serial("Reject a V5 TDX quote, revoked intermediate cert", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { intermediate } = await getTrusteeCertPems()
   const serial = normalizeSerialHex(
     new QV_X509Certificate(intermediate).serialNumber,
@@ -351,7 +351,7 @@ test.serial("Reject a V5 TDX quote, revoked intermediate cert", async (t) => {
 })
 
 test.serial("Reject a V5 TDX quote, revoked leaf cert", async (t) => {
-  const buf = fs.readFileSync("test/sample/tdx-v5-trustee.dat")
+  const buf = fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat")
   const { leaf } = await getTrusteeCertPems()
   const serial = normalizeSerialHex(new QV_X509Certificate(leaf).serialNumber)
   const crl = buildCRL([serial])
@@ -369,7 +369,7 @@ test.serial("Reject a V5 TDX quote, revoked leaf cert", async (t) => {
 
 test.serial("Reject a V5 TDX quote, unsupported TEE type", async (t) => {
   const original = Buffer.from(
-    fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+    fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
   )
   // header.tee_type at offset 4 (UInt32LE)
   original.writeUInt32LE(0, 4)
@@ -389,7 +389,7 @@ test.serial(
   "Reject a V5 TDX quote, unsupported attestation key type",
   async (t) => {
     const original = Buffer.from(
-      fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+      fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
     )
     // header.att_key_type at offset 2 (UInt16LE)
     original.writeUInt16LE(1, 2)
@@ -408,7 +408,7 @@ test.serial(
 
 test.serial("Reject a TDX v5 quote with unsupported version", async (t) => {
   const original = Buffer.from(
-    fs.readFileSync("test/sample/tdx-v5-trustee.dat"),
+    fs.readFileSync("test/sampleQuotes/tdx-v5-trustee.dat"),
   )
   // header.version at offset 0 (UInt16LE)
   original.writeUInt16LE(6, 0)

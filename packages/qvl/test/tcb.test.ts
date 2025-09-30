@@ -12,7 +12,7 @@ import {
 } from "tee-channels-qvl"
 
 const BASE_TIME = Date.parse("2025-09-29T23:00:00Z")
-const SAMPLE_DIR = "test/tcbInfo"
+const SAMPLE_DIR = "test/sampleTcbInfos"
 
 async function fetchTcbInfo(
   fmspcHex: string,
@@ -26,7 +26,7 @@ async function fetchTcbInfo(
     const raw = fs.readFileSync(cachePath, "utf8")
     return JSON.parse(raw)
   } else {
-    console.log("[unexpected!] getting tcbInfo from API:", fmspcHex)
+    console.log("unexpected: getting tcbInfo from API:", fmspcHex)
     const url = `https://api.trustedservices.intel.com/${tdxsgx}/certification/v4/tcb?fmspc=${fmspc}`
     const resp = await fetch(url, { headers: { Accept: "application/json" } })
     if (!resp.ok) {
@@ -152,8 +152,8 @@ async function assertTcb(
   const quote: Uint8Array = _b64
     ? scureBase64.decode(fs.readFileSync(path, "utf-8"))
     : _json
-    ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
-    : fs.readFileSync(path)
+      ? scureBase64.decode(JSON.parse(fs.readFileSync(path, "utf-8")).tdx.quote)
+      : fs.readFileSync(path)
 
   const stateRef: TcbRef = {}
   const ok = await (_tdx ? verifyTdx : verifySgx)(quote, {
@@ -169,7 +169,7 @@ async function assertTcb(
 }
 
 test.serial("Evaluate TCB (SGX): occlum", async (t) => {
-  await assertTcb(t, "test/sample/sgx-occlum.dat", {
+  await assertTcb(t, "test/sampleQuotes/sgx-occlum.dat", {
     _tdx: false,
     valid: false,
     status: "OutOfDate",
@@ -179,7 +179,7 @@ test.serial("Evaluate TCB (SGX): occlum", async (t) => {
 })
 
 test.serial("Evaluate TCB (SGX): chinenyeokafor", async (t) => {
-  await assertTcb(t, "test/sample/sgx-chinenyeokafor.dat", {
+  await assertTcb(t, "test/sampleQuotes/sgx-chinenyeokafor.dat", {
     _tdx: false,
     valid: true,
     status: "UpToDate",
@@ -189,7 +189,7 @@ test.serial("Evaluate TCB (SGX): chinenyeokafor", async (t) => {
 })
 
 test.serial("Evaluate TCB (SGX): tlsn-quote9", async (t) => {
-  await assertTcb(t, "test/sample/sgx-tlsn-quote9.dat", {
+  await assertTcb(t, "test/sampleQuotes/sgx-tlsn-quote9.dat", {
     _tdx: false,
     valid: false,
     status: "SWHardeningNeeded",
@@ -199,7 +199,7 @@ test.serial("Evaluate TCB (SGX): tlsn-quote9", async (t) => {
 })
 
 test.serial("Evaluate TCB (SGX): tlsn-quotedev", async (t) => {
-  await assertTcb(t, "test/sample/sgx-tlsn-quotedev.dat", {
+  await assertTcb(t, "test/sampleQuotes/sgx-tlsn-quotedev.dat", {
     _tdx: false,
     valid: false,
     status: "SWHardeningNeeded",
@@ -209,7 +209,7 @@ test.serial("Evaluate TCB (SGX): tlsn-quotedev", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v5): trustee", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v5-trustee.dat", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v5-trustee.dat", {
     _tdx: true,
     valid: true,
     status: "UpToDate",
@@ -219,7 +219,7 @@ test.serial("Evaluate TCB (TDX v5): trustee", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): azure", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-azure", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-azure", {
     _tdx: true,
     _b64: true,
     valid: false,
@@ -230,7 +230,7 @@ test.serial("Evaluate TCB (TDX v4): azure", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): edgeless", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-edgeless.dat", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-edgeless.dat", {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
@@ -240,7 +240,7 @@ test.serial("Evaluate TCB (TDX v4): edgeless", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): gcp", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-gcp.json", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-gcp.json", {
     _tdx: true,
     _json: true,
     valid: true,
@@ -251,7 +251,7 @@ test.serial("Evaluate TCB (TDX v4): gcp", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): gcp no nonce", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-gcp-no-nonce.json", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-gcp-no-nonce.json", {
     _tdx: true,
     _json: true,
     valid: true,
@@ -262,7 +262,7 @@ test.serial("Evaluate TCB (TDX v4): gcp no nonce", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): moemahhouk", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-moemahhouk.dat", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-moemahhouk.dat", {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
@@ -272,7 +272,7 @@ test.serial("Evaluate TCB (TDX v4): moemahhouk", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): phala", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-phala.dat", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-phala.dat", {
     _tdx: true,
     valid: true,
     status: "UpToDate",
@@ -282,7 +282,7 @@ test.serial("Evaluate TCB (TDX v4): phala", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): trustee", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-trustee.dat", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-trustee.dat", {
     _tdx: true,
     valid: false,
     status: "OutOfDate",
@@ -292,7 +292,7 @@ test.serial("Evaluate TCB (TDX v4): trustee", async (t) => {
 })
 
 test.serial("Evaluate TCB (TDX v4): zkdcap", async (t) => {
-  await assertTcb(t, "test/sample/tdx-v4-zkdcap.dat", {
+  await assertTcb(t, "test/sampleQuotes/tdx-v4-zkdcap.dat", {
     _tdx: true,
     valid: false,
     status: "OutOfDate",

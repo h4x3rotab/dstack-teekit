@@ -27,7 +27,10 @@ import {
 const BASE_TIME = Date.parse("2025-09-01")
 
 test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
-  const quoteHex = fs.readFileSync("test/sample/tdx-v4-tappd.hex", "utf-8")
+  const quoteHex = fs.readFileSync(
+    "test/sampleQuotes/tdx-v4-tappd.hex",
+    "utf-8",
+  )
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
   const { header, body } = parseTdxQuote(quote)
@@ -58,7 +61,7 @@ test.serial("Verify a V4 TDX quote from Tappd", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-edgeless.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v4-edgeless.dat")
 
   const { header, body } = parseTdxQuote(quote)
   const { fmspc, pcesvn } = await _verifyTdx(quote)
@@ -88,7 +91,7 @@ test.serial("Verify a V4 TDX quote from Edgeless", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-phala.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v4-phala.dat")
 
   const { header, body } = parseTdxQuote(quote)
   const { fmspc, pcesvn } = await _verifyTdx(quote)
@@ -118,7 +121,10 @@ test.serial("Verify a V4 TDX quote from Phala, bin format", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
-  const quoteHex = fs.readFileSync("test/sample/tdx-v4-phala.hex", "utf-8")
+  const quoteHex = fs.readFileSync(
+    "test/sampleQuotes/tdx-v4-phala.hex",
+    "utf-8",
+  )
   const quote = Buffer.from(quoteHex.replace(/^0x/, ""), "hex")
 
   const { header, body } = parseTdxQuote(quote)
@@ -149,7 +155,7 @@ test.serial("Verify a V4 TDX quote from Phala, hex format", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-moemahhouk.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v4-moemahhouk.dat")
 
   const { header, body } = parseTdxQuote(quote)
   const { fmspc, pcesvn } = await _verifyTdx(quote)
@@ -181,7 +187,7 @@ test.serial("Verify a V4 TDX quote from MoeMahhouk", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Azure", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-azure", "utf-8")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v4-azure", "utf-8")
   const { header, body } = parseTdxQuoteBase64(quote)
   const { fmspc, pcesvn } = await _verifyTdx(scureBase64.decode(quote))
 
@@ -210,7 +216,7 @@ test.serial("Verify a V4 TDX quote from Azure", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-trustee.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v4-trustee.dat")
   const { header, body } = parseTdxQuote(quote)
   const { fmspc, pcesvn } = await _verifyTdx(quote)
 
@@ -239,7 +245,7 @@ test.serial("Verify a V4 TDX quote from Trustee", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from ZKDCAP", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx-v4-zkdcap.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx-v4-zkdcap.dat")
   const { header, body } = parseTdxQuote(quote)
   const { fmspc, pcesvn } = await _verifyTdx(quote)
 
@@ -268,7 +274,7 @@ test.serial("Verify a V4 TDX quote from ZKDCAP", async (t) => {
 })
 
 test.serial("Verify a V4 TDX quote from Intel", async (t) => {
-  const quote = fs.readFileSync("test/sample/tdx/quote.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/tdx/quote.dat")
   const { header, body } = parseTdxQuote(quote)
 
   const expectedMRTD =
@@ -286,20 +292,20 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
 
   // Intel sample is missing certdata, reconstruct it from provided PEM files instead
   const root = extractPemCertificates(
-    fs.readFileSync("test/sample/tdx/trustedRootCaCert.pem"),
+    fs.readFileSync("test/sampleQuotes/tdx/trustedRootCaCert.pem"),
   )
   const pckChain = extractPemCertificates(
-    fs.readFileSync("test/sample/tdx/pckSignChain.pem"),
+    fs.readFileSync("test/sampleQuotes/tdx/pckSignChain.pem"),
   )
   const pckCert = extractPemCertificates(
-    fs.readFileSync("test/sample/tdx/pckCert.pem"),
+    fs.readFileSync("test/sampleQuotes/tdx/pckCert.pem"),
   )
   const certdata = [...root, ...pckChain, ...pckCert]
 
   // Use provided certificate revocation lists
   const crls = [
-    fs.readFileSync("test/sample/tdx/rootCaCrl.der"),
-    fs.readFileSync("test/sample/tdx/intermediateCaCrl.der"),
+    fs.readFileSync("test/sampleQuotes/tdx/rootCaCrl.der"),
+    fs.readFileSync("test/sampleQuotes/tdx/intermediateCaCrl.der"),
   ]
 
   const { fmspc, pcesvn } = await _verifyTdx(quote, {
@@ -323,7 +329,7 @@ test.serial("Verify a V4 TDX quote from Intel", async (t) => {
 
 test.serial("Verify a V4 TDX quote from GCP", async (t) => {
   const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+    fs.readFileSync("test/sampleQuotes/tdx-v4-gcp.json", "utf-8"),
   )
   const quote: string = data.tdx.quote
   const { header, body } = parseTdxQuoteBase64(quote)
@@ -357,7 +363,7 @@ test.serial("Verify a V4 TDX quote from GCP", async (t) => {
 
 function getGcpQuoteBase64(): string {
   const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+    fs.readFileSync("test/sampleQuotes/tdx-v4-gcp.json", "utf-8"),
   )
   return data.tdx.quote as string
 }

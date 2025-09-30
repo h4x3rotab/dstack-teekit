@@ -22,7 +22,7 @@ import {
 const BASE_TIME = Date.parse("2025-09-01")
 
 test.serial("Verify an SGX quote from Intel, no quote signature", async (t) => {
-  const quote = fs.readFileSync("test/sample/sgx/quote.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/sgx/quote.dat")
   const { header, body, signature } = parseSgxQuote(quote)
 
   const expectedMrEnclave =
@@ -45,20 +45,20 @@ test.serial("Verify an SGX quote from Intel, no quote signature", async (t) => {
 
   // Intel sample is missing certdata, reconstruct it from provided PEM files instead
   const root = extractPemCertificates(
-    fs.readFileSync("test/sample/sgx/trustedRootCaCert.pem"),
+    fs.readFileSync("test/sampleQuotes/sgx/trustedRootCaCert.pem"),
   )
   const pckChain = extractPemCertificates(
-    fs.readFileSync("test/sample/sgx/pckSignChain.pem"),
+    fs.readFileSync("test/sampleQuotes/sgx/pckSignChain.pem"),
   )
   const pckCert = extractPemCertificates(
-    fs.readFileSync("test/sample/sgx/pckCert.pem"),
+    fs.readFileSync("test/sampleQuotes/sgx/pckCert.pem"),
   )
   const certdata = [...root, ...pckChain, ...pckCert]
 
   // Use provided certificate revocation lists
   const crls = [
-    fs.readFileSync("test/sample/sgx/rootCaCrl.der"),
-    fs.readFileSync("test/sample/sgx/intermediateCaCrl.der"),
+    fs.readFileSync("test/sampleQuotes/sgx/rootCaCrl.der"),
+    fs.readFileSync("test/sampleQuotes/sgx/intermediateCaCrl.der"),
   ]
 
   const { fmspc, pcesvn } = await _verifySgx(quote, {
@@ -81,7 +81,7 @@ test.serial("Verify an SGX quote from Intel, no quote signature", async (t) => {
 })
 
 test.serial("Verify an SGX quote from Occlum", async (t) => {
-  const quote = fs.readFileSync("test/sample/sgx-occlum.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/sgx-occlum.dat")
   const { header, body } = parseSgxQuote(quote)
   const { fmspc, pcesvn } = await _verifySgx(quote)
 
@@ -107,7 +107,7 @@ test.serial("Verify an SGX quote from Occlum", async (t) => {
 })
 
 test.serial("Verify an SGX quote from chinenyeokafor", async (t) => {
-  const quote = fs.readFileSync("test/sample/sgx-chinenyeokafor.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/sgx-chinenyeokafor.dat")
   const { header, body } = parseSgxQuote(quote)
   const { fmspc, pcesvn } = await _verifySgx(quote)
 
@@ -133,7 +133,7 @@ test.serial("Verify an SGX quote from chinenyeokafor", async (t) => {
 })
 
 test.serial("Verify an SGX quote from TLSN, quote9", async (t) => {
-  const quote = fs.readFileSync("test/sample/sgx-tlsn-quote9.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/sgx-tlsn-quote9.dat")
   const { header, body } = parseSgxQuote(quote)
   const { fmspc, pcesvn } = await _verifySgx(quote)
 
@@ -159,7 +159,7 @@ test.serial("Verify an SGX quote from TLSN, quote9", async (t) => {
 })
 
 test.serial("Verify an SGX quote from TLSN, quote_dev", async (t) => {
-  const quote = fs.readFileSync("test/sample/sgx-tlsn-quotedev.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/sgx-tlsn-quotedev.dat")
   const { header, body } = parseSgxQuote(quote)
   const { fmspc, pcesvn } = await _verifySgx(quote)
 
@@ -187,7 +187,7 @@ test.serial("Verify an SGX quote from TLSN, quote_dev", async (t) => {
 // Negative tests based on the Occlum SGX quote
 
 test.serial("Reject an SGX quote, missing root cert", async (t) => {
-  const quote = fs.readFileSync("test/sample/sgx-occlum.dat")
+  const quote = fs.readFileSync("test/sampleQuotes/sgx-occlum.dat")
   const err = await t.throwsAsync(
     async () =>
       await verifySgx(quote, {
@@ -202,7 +202,7 @@ test.serial("Reject an SGX quote, missing root cert", async (t) => {
 })
 
 test.serial("Reject an SGX quote, missing intermediate cert", async (t) => {
-  const original = fs.readFileSync("test/sample/sgx-occlum.dat")
+  const original = fs.readFileSync("test/sampleQuotes/sgx-occlum.dat")
   const { leaf, root } = await getCertPemsFromQuote(original)
   const noEmbedded = rebuildSgxQuoteWithCertData(original, Buffer.alloc(0))
   const err = await t.throwsAsync(
@@ -219,7 +219,7 @@ test.serial("Reject an SGX quote, missing intermediate cert", async (t) => {
 })
 
 test.serial("Reject an SGX quote, missing leaf cert", async (t) => {
-  const original = fs.readFileSync("test/sample/sgx-occlum.dat")
+  const original = fs.readFileSync("test/sampleQuotes/sgx-occlum.dat")
   const { intermediate, root } = await getCertPemsFromQuote(original)
   const noEmbedded = rebuildSgxQuoteWithCertData(original, Buffer.alloc(0))
   const err = await t.throwsAsync(
@@ -236,7 +236,7 @@ test.serial("Reject an SGX quote, missing leaf cert", async (t) => {
 })
 
 test.serial("Reject an SGX quote, revoked root cert", async (t) => {
-  const original = fs.readFileSync("test/sample/sgx-occlum.dat")
+  const original = fs.readFileSync("test/sampleQuotes/sgx-occlum.dat")
   const { root } = await getCertPemsFromQuote(original)
   const rootSerial = normalizeSerialHex(
     new QV_X509Certificate(root).serialNumber,
@@ -255,7 +255,7 @@ test.serial("Reject an SGX quote, revoked root cert", async (t) => {
 })
 
 test.serial("Reject an SGX quote, invalid root self-signature", async (t) => {
-  const original = fs.readFileSync("test/sample/sgx-occlum.dat")
+  const original = fs.readFileSync("test/sampleQuotes/sgx-occlum.dat")
   const { leaf, intermediate, root } = await getCertPemsFromQuote(original)
   const tamperedRoot = tamperPemSignature(root)
   const noEmbedded = rebuildSgxQuoteWithCertData(original, Buffer.alloc(0))
@@ -273,7 +273,9 @@ test.serial("Reject an SGX quote, invalid root self-signature", async (t) => {
 })
 
 test.serial("Reject an SGX quote, incorrect QE signature", async (t) => {
-  const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const original = Buffer.from(
+    fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+  )
   const signedLen = getSgxSignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
@@ -305,7 +307,9 @@ test.serial("Reject an SGX quote, incorrect QE signature", async (t) => {
 })
 
 test.serial("Reject an SGX quote, incorrect QE binding", async (t) => {
-  const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const original = Buffer.from(
+    fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+  )
   const signedLen = getSgxSignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
@@ -337,7 +341,9 @@ test.serial("Reject an SGX quote, incorrect QE binding", async (t) => {
 })
 
 test.serial("Reject an SGX quote, incorrect quote signature", async (t) => {
-  const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const original = Buffer.from(
+    fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+  )
   const signedLen = getSgxSignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
@@ -369,7 +375,9 @@ test.serial("Reject an SGX quote, incorrect quote signature", async (t) => {
 })
 
 test.serial("Reject an SGX quote, unsupported cert_data_type", async (t) => {
-  const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const original = Buffer.from(
+    fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+  )
   const signedLen = getSgxSignedRegion(original).length
   const sigLen = original.readUInt32LE(signedLen)
   const sigStart = signedLen + 4
@@ -409,7 +417,9 @@ test.serial("Reject an SGX quote, unsupported cert_data_type", async (t) => {
 test.serial(
   "Reject an SGX quote, missing certdata (no fallback)",
   async (t) => {
-    const base = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+    const base = Buffer.from(
+      fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+    )
     const noEmbedded = rebuildSgxQuoteWithCertData(base, Buffer.alloc(0))
     const err = await t.throwsAsync(
       async () =>
@@ -427,7 +437,7 @@ test.serial(
 test.serial(
   "Reject an SGX quote, cert chain not yet valid (too early)",
   async (t) => {
-    const buf = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+    const buf = Buffer.from(fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"))
     const early = Date.parse("2000-01-01")
     const err = await t.throwsAsync(
       async () =>
@@ -439,7 +449,7 @@ test.serial(
 )
 
 test.serial("Reject an SGX quote, cert chain expired (too late)", async (t) => {
-  const buf = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const buf = Buffer.from(fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"))
   const late = Date.parse("2100-01-01")
   const err = await t.throwsAsync(
     async () =>
@@ -450,7 +460,7 @@ test.serial("Reject an SGX quote, cert chain expired (too late)", async (t) => {
 })
 
 test.serial("Reject an SGX quote, revoked intermediate cert", async (t) => {
-  const buf = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const buf = Buffer.from(fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"))
   const { intermediate } = await getCertPemsFromQuote(buf)
   const serial = normalizeSerialHex(
     new QV_X509Certificate(intermediate).serialNumber,
@@ -469,7 +479,7 @@ test.serial("Reject an SGX quote, revoked intermediate cert", async (t) => {
 })
 
 test.serial("Reject an SGX quote, revoked leaf cert", async (t) => {
-  const buf = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const buf = Buffer.from(fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"))
   const { leaf } = await getCertPemsFromQuote(buf)
   const serial = normalizeSerialHex(new QV_X509Certificate(leaf).serialNumber)
   const crl = buildCRL([serial])
@@ -486,7 +496,9 @@ test.serial("Reject an SGX quote, revoked leaf cert", async (t) => {
 })
 
 test.serial("Reject an SGX quote, unsupported TEE type", async (t) => {
-  const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const original = Buffer.from(
+    fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+  )
   // header.tee_type at offset 4 (UInt32LE)
   original.writeUInt32LE(129, 4)
   const err = await t.throwsAsync(
@@ -504,7 +516,9 @@ test.serial("Reject an SGX quote, unsupported TEE type", async (t) => {
 test.serial(
   "Reject an SGX quote, unsupported attestation key type",
   async (t) => {
-    const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+    const original = Buffer.from(
+      fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+    )
     // header.att_key_type at offset 2 (UInt16LE)
     original.writeUInt16LE(1, 2)
     const err = await t.throwsAsync(
@@ -521,7 +535,9 @@ test.serial(
 )
 
 test.serial("Reject an SGX quote with unsupported version", async (t) => {
-  const original = Buffer.from(fs.readFileSync("test/sample/sgx-occlum.dat"))
+  const original = Buffer.from(
+    fs.readFileSync("test/sampleQuotes/sgx-occlum.dat"),
+  )
   // header.version at offset 0 (UInt16LE)
   original.writeUInt16LE(4, 0)
   const err = await t.throwsAsync(

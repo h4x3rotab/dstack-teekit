@@ -10,7 +10,7 @@ import {
 
 test.serial("get expected report_data by nonce, iat, userdata", async (t) => {
   const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+    fs.readFileSync("test/sampleQuotes/tdx-v4-gcp.json", "utf-8"),
   )
   const quoteB64: string = data.tdx.quote
   const nonce: Uint8Array = scureBase64.decode(data.tdx.verifier_nonce.val)

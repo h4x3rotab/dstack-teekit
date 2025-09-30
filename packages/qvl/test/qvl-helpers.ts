@@ -78,7 +78,7 @@ export function decodeGcpSample() {
   const base64 = require("@scure/base")
     .base64 as typeof import("@scure/base").base64
   const data = JSON.parse(
-    fs.readFileSync("test/sample/tdx-v4-gcp.json", "utf-8"),
+    fs.readFileSync("test/sampleQuotes/tdx-v4-gcp.json", "utf-8"),
   )
   const quoteB64: string = data.tdx.quote
   const nonceB64: string = data.tdx.verifier_nonce.val
