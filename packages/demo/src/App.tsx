@@ -254,7 +254,7 @@ function App() {
   return (
     <div className="chat-container">
       <div className="chat-header">
-        <h1>Chat Room</h1>
+        <h1>TEE Chat Room</h1>
         <div className="user-info">
           <span className="username">You are: {username}</span>
           <span>
@@ -447,7 +447,7 @@ function App() {
               }}
               style={buttonStyle}
             >
-              Open /uptime
+              Open /uptime (disallowed)
             </button>
 
             <button
