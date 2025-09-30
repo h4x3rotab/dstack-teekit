@@ -1,11 +1,13 @@
 # tee-channels
 
 [![tests](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml/badge.svg)](https://github.com/canvasxyz/tee-channels/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/tee-channels-qvl.svg)](https://www.npmjs.com/package/@canvas-js/core)
 [![npm](https://img.shields.io/npm/v/tee-channels-tunnel?color=33cd56&logo=npm)](https://www.npmjs.com/package/tee-channels-tunnel)
 
-This repository implements a protocol for remotely-attested HTTPS and
+This repository implements protocols for remotely-attested HTTPS and
 WSS channels, which web pages can use to establish secure connections
-terminating inside trusted execution environments (currently Intel TDX/SGX).
+that verifiably terminate inside trusted execution environments
+(currently Intel TDX/SGX).
 
 ## Background
 
@@ -15,9 +17,9 @@ that web pages cannot natively verify that they're connected to a
 TEE. Browsers don't expose X.509 certificate extensions that can be
 used to prove a connection terminates inside the secured environment,
 so proxies like Cloudflare can trivially see and modify traffic to
-TEEs forwarded through them. Anyone hosting a TEE app can easily insert
-their own TLS proxy in front of it, breaking privacy and extracting
-session data that lets them impersonate the user.
+TEEs forwarded through them. Anyone hosting a TEE app can easily
+insert their own TLS proxy in front of it, breaking privacy and
+extracting session data that lets them impersonate the user.
 
 To work around this, some TEE application hosts implement their own
 proxy in front of the TEE, but this simply moves trust to a different
@@ -206,66 +208,15 @@ encoded and encrypted with the XSalsa20‑Poly1305 stream cipher
    `{ type: "enc", nonce, ciphertext }` carrying tunneled HTTP
    and WebSocket messages.
 
-## Considerations & Limitations
+## Limitations
 
-- For security reasons, we currently require that all WebSocket connections to the HTTP server go through the encrypted channel.
-- Client WebSocket targets must use the same port as the tunnel `origin`.
+- For security reasons, we currently require that all WebSocket connections to the HTTP server go through the encrypted channel. Mixing and matching unencrypted WebSockets and tee-channels is not supported.
 - One keypair is generated per server process. No key rotation (yet) or support for load balancing across TEEs.
-- HTTP request bodies supported: string, `Uint8Array`, `ArrayBuffer`, and `ReadableStream`.
 - HTTP request/response bodies are buffered end-to-end; very large payloads cannot be streamed.
-- The default client request timeout is 30s and not configurable.
-- The client `WebSocket.send` does not accept `Blob`.
-- The client `fetch` does not natively serialize `FormData`.
+- HTTP request bodies supported: string, `Uint8Array`, `ArrayBuffer`, and `ReadableStream` (no`FormData`).
+- Our `WebSocket.send` does not accept `Blob`; convert blobs to `ArrayBuffer` or `Uint8Array` first.
+- The default client request timeout is 30s and not configurable at this time.
 - WebSocket messages queued before `open` are automatically flushed once the socket opens.
-
-## API
-
-```ts
-import {
-  TunnelServer,
-  TunnelClient,
-  ServerRAMockWebSocket,
-  ServerRAMockWebSocketServer,
-  ClientRAMockWebSocket,
-} from "tee-channels-tunnel"
-
-class TunnelServer {
-  static initialize(
-    app: Express,
-    getQuote: (x25519PublicKey: Uint8Array) => Awaitable<Uint8Array>,
-    config?: { heartbeatInterval?: number, heartbeatTimeout?: number }
-  ): Promise<TunnelServer>
-  server: http.Server                // call `server.listen(...)` to bind a port.
-  wss: ServerRAMockWebSocketServer   // emits "connection" and manages `ServerRAMockWebSocket` clients
-}
-
-class TunnelClient {
-  static initialize(
-    origin: string,
-    config: {
-      mrtd?: string;
-      report_data?: string;
-      customVerifyQuote?: (quote) => Awaitable<boolean>
-      customVerifyX25519Binding?: (client: TunnelClient) => Awaitable<boolean>
-      sgx?: boolean
-    }
-  ): Promise<TunnelClient>
-
-  fetch(input, init?): Promise<Response>   // compatible with Node.js fetch API
-  WebSocket: typeof ClientRAMockWebSocket  // compatible with WebSocket constructor
-}
-```
-
-## Troubleshooting
-
-- Client WebSocket never opens and an `error` event fires immediately:
-  - Ensure the target WS URL uses the same port as the client `origin`.
-- `Request timeout` after 30 seconds:
-  - Server handler may not be responding; confirm your Express route returns a response and that the tunnel server is running.
-- Seeing plaintext messages on the wire:
-  - Only `server_kx` and `client_kx` are plaintext; everything else must be `{ type: "enc", ... }`.
-- `Blob` not supported when sending through WebSocket:
-  - Convert to `ArrayBuffer`/`Uint8Array` first.
 
 ## License
 

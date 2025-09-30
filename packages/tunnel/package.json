@@ -4,6 +4,9 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "concurrently -n ts,sw -c green,cyan  \"tsc --watch\" \"esbuild src/sw.ts --bundle --watch --outfile=lib/sw.build.js\"",
     "build": "tsc && esbuild src/sw.ts --bundle --outfile=lib/sw.build.js",
