@@ -18,12 +18,26 @@ import {
   encryptedOnly,
   QuoteData,
 } from "@teekit/tunnel"
+import { getDstackQuote, isDstackEnvironment } from "@teekit/tunnel/dstack"
 import fs from "node:fs"
 import { exec } from "node:child_process"
 import { base64 } from "@scure/base"
 import { hex } from "@teekit/qvl"
 
 async function getQuote(x25519PublicKey: Uint8Array): Promise<QuoteData> {
+  // Check if DSTACK_ENABLED is set or if we're in a dstack environment
+  const useDstack = process.env.DSTACK_ENABLED === "true" || isDstackEnvironment()
+
+  if (useDstack) {
+    console.log("[teekit-demo] Using dstack-guest-agent for quote generation")
+    try {
+      return await getDstackQuote(x25519PublicKey)
+    } catch (err) {
+      console.error("[teekit-demo] Failed to get dstack quote:", err)
+      console.log("[teekit-demo] Falling back to alternative quote methods")
+    }
+  }
+
   return await new Promise<QuoteData>(async (resolve, reject) => {
     // If config.json isn't set up, return a sample quote
     if (!fs.existsSync("config.json")) {

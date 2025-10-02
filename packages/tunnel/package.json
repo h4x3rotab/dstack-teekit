@@ -15,7 +15,8 @@
   "exports": {
     ".": "./lib/index.js",
     "./sw": "./lib/swMiddleware.js",
-    "./register": "./lib/registerServiceWorker.js"
+    "./register": "./lib/registerServiceWorker.js",
+    "./dstack": "./lib/dstack.js"
   },
   "dependencies": {
     "cbor-x": "^1.6.0",

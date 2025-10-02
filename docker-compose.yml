@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  teekit-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Expose the demo server port (matches packages/demo/server.ts PORT)
+      # Phala Cloud will automatically generate URL: https://<app-id>-3001.dstack-prod5.phala.network
+      - "3001:3001"
+    volumes:
+      # Mount dstack-guest-agent Unix socket for quote generation
+      - /var/run/dstack.sock:/var/run/dstack.sock
+    environment:
+      # Enable dstack quote provider
+      - DSTACK_ENABLED=true
+      # Set port (default is 3001)
+      - PORT=3001
+    restart: unless-stopped
+    # Healthcheck to ensure service is running
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/uptime"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
